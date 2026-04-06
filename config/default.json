@@ -1,0 +1,23 @@
+{
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "api_key": "",
+    "base_url": "https://api.openai.com/v1"
+  },
+  "voice": {
+    "asr_model": "paraformer",
+    "tts_model": "kokoro",
+    "vad_model": "silero-vad"
+  },
+  "character": {
+    "model_path": "models/default/2031903848872972007.glb",
+    "name": "Fairy",
+    "personality": "温柔、活泼、有点调皮"
+  },
+  "window": {
+    "transparent": true,
+    "always_on_top": true,
+    "click_through": true
+  }
+}

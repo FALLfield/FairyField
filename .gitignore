@@ -1,0 +1,76 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node.js dependencies and build artifacts
+node_modules
+dist
+dist-ssr
+*.local
+
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/WixTools/
+src-tauri/gen/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+*~
+
+# Sensitive files and configuration
+.env
+.env.local
+.env.*.local
+config.json
+*.key
+*.pem
+
+# Audio/TTS temporary files
+/tmp/
+*.mp3
+*.wav
+*.webm
+
+# Memory and audit logs
+memory.db
+audit.log
+*.db-shm
+*.db-wal
+
+# Live2D model files (exclude actual model files, keep documentation)
+public/models/default/*.moc3
+public/models/default/*.png
+public/models/default/textures/
+public/models/default/motions/
+public/models/default/expressions/
+public/models/default/physics3.json
+public/models/default/pose3.json
+public/models/default/model3.json
+
+# Keep documentation and tools
+!public/models/default/README.md
+!public/models/default/verify-model.cjs
+!public/models/default/download-sample-model.sh
+!public/models/default/model3.json.example
+!public/models/default/INTEGRATION_TEST.md

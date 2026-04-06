@@ -1,0 +1,35 @@
+[package]
+name = "fairyfield"
+version = "0.1.0"
+description = "桌面全息 AI 伴侣应用"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "fairyfield_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream", "multipart"] }
+
+# 持久化存储（Phase 2 启用）
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# ========== Phase 2 依赖（语音管道）==========
+# 启用 Phase 2 时取消注释：
+# sherpa-onnx = { version = "x.y", features = [...] }
+
+# ========== Phase 3 依赖（AI 大脑）==========
+# 启用 Phase 3 时取消注释：
+# rig-core = "x.y"
