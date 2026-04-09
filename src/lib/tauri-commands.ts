@@ -23,27 +23,35 @@ export type Emotion =
 /** LLM 配置 */
 export interface LlmConfig {
   provider: string;
+  api_endpoint: string;
   model: string;
-  api_key: string;
-  base_url: string;
+  system_prompt: string;
+  max_context_tokens: number;
+  temperature: number;
 }
 
 /** 语音配置 */
 export interface VoiceConfig {
-  asr_model: string;
-  tts_model: string;
-  vad_model: string;
+  asr_enabled: boolean;
+  tts_enabled: boolean;
+  vad_enabled: boolean;
+  tts_speaker: string;
+  asr_model_path: string;
+  tts_model_path: string;
+  vad_model_path: string;
 }
 
 /** 角色配置 */
 export interface CharacterConfig {
   model_path: string;
+  default_expression: string;
   name: string;
-  personality: string;
 }
 
 /** 窗口配置 */
 export interface WindowConfig {
+  width: number;
+  height: number;
   transparent: boolean;
   always_on_top: boolean;
   click_through: boolean;

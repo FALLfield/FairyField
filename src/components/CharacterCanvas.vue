@@ -13,6 +13,7 @@ import { VRMRenderer } from '../renderers/VRMRenderer';
 import { ExpressionModule } from '../modules/ExpressionModule';
 import { LipSyncModule } from '../modules/LipSyncModule';
 import { EyeTrackModule } from '../modules/EyeTrackModule';
+import { createEmotionEngine } from '../lib/emotion-engine';
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const isLoading = ref(true);
@@ -23,6 +24,7 @@ let expressionModule: ExpressionModule | null = null;
 let lipSyncModule: LipSyncModule | null = null;
 let eyeTrackModule: EyeTrackModule | null = null;
 let tickFrameId: number | null = null;
+const emotionEngine = createEmotionEngine();
 
 const DEFAULT_MODEL_URL = '/models/default/2031903848872972972007.glb';
 
@@ -54,6 +56,7 @@ onMounted(async () => {
 
       expressionModule?.tick(delta);
       lipSyncModule?.tick();
+      emotionEngine.tick();
 
       tickFrameId = requestAnimationFrame(tick);
     };

@@ -104,6 +104,29 @@ fn load_config() -> Result<AppConfig, String> {
     Ok(default_config())
 }
 
+/// 保存应用配置
+///
+/// Phase 3 stub：将配置写入本地文件。
+#[tauri::command]
+fn save_config(config: AppConfig) -> Result<(), String> {
+    // TODO: Phase 3 — 写入 config/default.json
+    let _ = config;
+    Ok(())
+}
+
+/// 获取窗口尺寸
+#[tauri::command]
+async fn get_window_size(window: tauri::Window) -> Result<WindowConfig, String> {
+    let size = window.inner_size().map_err(|e| e.to_string())?;
+    Ok(WindowConfig {
+        width: size.width,
+        height: size.height,
+        transparent: true,
+        always_on_top: true,
+        click_through: true,
+    })
+}
+
 /// 窗口拖拽命令（保留）
 #[tauri::command]
 async fn start_drag(window: tauri::Window) -> Result<(), String> {
@@ -132,6 +155,8 @@ pub fn run() {
             start_tts,
             get_vad_state,
             load_config,
+            save_config,
+            get_window_size,
             start_drag,
             set_ignore_cursor_events,
         ])

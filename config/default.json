@@ -1,21 +1,29 @@
 {
   "llm": {
     "provider": "openai",
-    "model": "gpt-4",
-    "api_key": "",
-    "base_url": "https://api.openai.com/v1"
+    "api_endpoint": "https://api.openai.com/v1",
+    "model": "gpt-4o",
+    "system_prompt": "你是 FairyField 的 AI 伴侣角色，性格活泼可爱。",
+    "max_context_tokens": 4096,
+    "temperature": 0.8
   },
   "voice": {
-    "asr_model": "paraformer",
-    "tts_model": "kokoro",
-    "vad_model": "silero-vad"
+    "asr_enabled": false,
+    "tts_enabled": false,
+    "vad_enabled": false,
+    "tts_speaker": "default",
+    "asr_model_path": "",
+    "tts_model_path": "",
+    "vad_model_path": ""
   },
   "character": {
-    "model_path": "models/default/2031903848872972007.glb",
-    "name": "Fairy",
-    "personality": "温柔、活泼、有点调皮"
+    "model_path": "models/default/2031903848872972972007.glb",
+    "default_expression": "neutral",
+    "name": "Fairy"
   },
   "window": {
+    "width": 512,
+    "height": 768,
     "transparent": true,
     "always_on_top": true,
     "click_through": true
