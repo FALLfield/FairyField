@@ -24,12 +24,33 @@ export class VRMRenderer {
 
   /** VRM 加载完成回调 */
   private onVRMLoadedCallback: ((vrm: VRM) => void) | null = null;
+  private dpiMediaQuery: MediaQueryList | null = null;
+  private dpiHandler: ((e: MediaQueryListEvent) => void) | null = null;
 
   /** 窗口 resize 事件处理（箭头函数，自动绑定 this） */
   private handleResize = (): void => {
     const canvas = this.renderer.domElement;
     this.resize(canvas.clientWidth, canvas.clientHeight);
   };
+
+  /**
+   * 监听 DPI 变化（窗口在 Retina ↔ 外接显示器间移动时触发）
+   */
+  private watchDpiChange(): void {
+    const dpr = window.devicePixelRatio;
+    const mql = window.matchMedia(`(resolution: ${dpr}dppx)`);
+    this.dpiMediaQuery = mql;
+
+    this.dpiHandler = (e: MediaQueryListEvent): void => {
+      e.preventDefault?.();
+      // DPI 变了，重新注册新的监听
+      this.dpiMediaQuery?.removeEventListener('change', this.dpiHandler!);
+      this.handleResize();
+      this.watchDpiChange();
+    };
+
+    mql.addEventListener('change', this.dpiHandler);
+  }
 
   constructor(canvas: HTMLCanvasElement) {
     // 场景
@@ -70,6 +91,9 @@ export class VRMRenderer {
 
     // 监听窗口 resize
     window.addEventListener('resize', this.handleResize);
+
+    // 监听显示器切换时的 DPI 变化（Retina ↔ 外接显示器）
+    this.watchDpiChange();
   }
 
   /**
@@ -117,10 +141,43 @@ export class VRMRenderer {
     this.vrm = loadedVrm;
     this.scene.add(this.vrm.scene);
 
+    // 根据模型包围盒自动调整相机，确保角色完整显示在视口内
+    this.fitCameraToModel();
+
     // 触发回调
     if (this.onVRMLoadedCallback) {
       this.onVRMLoadedCallback(this.vrm);
     }
+  }
+
+  /**
+   * 根据模型包围盒自动调整相机位置，确保角色完整显示
+   *
+   * 桌面伴侣窗口较小（400x600），需要根据模型实际尺寸调整相机距离。
+   */
+  private fitCameraToModel(): void {
+    if (!this.vrm) return;
+
+    const box = new THREE.Box3().setFromObject(this.vrm.scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+
+    // 聚焦角色上半身：从中心偏上开始
+    const targetY = center.y + size.y * 0.15;
+    const aspect = this.camera.aspect;
+
+    // 根据模型高度和 FOV 计算合适的相机距离
+    const fov = this.camera.fov * (Math.PI / 180);
+    const halfHeight = size.y / 2;
+    const distForHeight = halfHeight / Math.tan(fov / 2);
+    const distForWidth = (size.x / 2) / Math.tan(fov / 2) / aspect;
+    const distance = Math.max(distForHeight, distForWidth) * 1.2;
+
+    this.camera.position.set(0, targetY, distance);
+    this.camera.lookAt(0, targetY, 0);
+    this.camera.updateProjectionMatrix();
   }
 
   /**
@@ -279,6 +336,13 @@ export class VRMRenderer {
 
     // 移除事件监听
     window.removeEventListener('resize', this.handleResize);
+
+    // 清理 DPI 监听
+    if (this.dpiMediaQuery && this.dpiHandler) {
+      this.dpiMediaQuery.removeEventListener('change', this.dpiHandler);
+      this.dpiMediaQuery = null;
+      this.dpiHandler = null;
+    }
 
     // 释放 VRM 资源
     if (this.vrm) {

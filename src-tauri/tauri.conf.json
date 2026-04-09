@@ -15,7 +15,7 @@
         "title": "fairyfield",
         "width": 400,
         "height": 600,
-        "resizable": false,
+        "resizable": true,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,
@@ -24,7 +24,8 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

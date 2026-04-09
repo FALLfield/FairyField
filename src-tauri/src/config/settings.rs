@@ -100,7 +100,7 @@ pub fn default_config() -> AppConfig {
             vad_model_path: String::new(),
         },
         character: CharacterConfig {
-            model_path: "models/default/2031903848872972972007.glb".to_string(),
+            model_path: "models/default/2031903848872972007.glb".to_string(),
             default_expression: "neutral".to_string(),
             name: "Fairy".to_string(),
         },

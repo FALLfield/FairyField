@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, useTemplateRef, watch } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 import CharacterCanvas from './components/CharacterCanvas.vue';
 import ControlPanel from './components/ControlPanel.vue';
 import { startDrag as tauriStartDrag } from './lib/tauri-commands';
@@ -10,12 +10,19 @@ const fps = ref(0);
 const modelLoaded = ref(false);
 const errorMessage = ref('');
 
-/** 同步 CharacterCanvas 的状态 */
-watch(characterCanvasRef, (canvas) => {
-  if (!canvas) return;
-  modelLoaded.value = !canvas.isLoading;
-  errorMessage.value = canvas.errorMessage;
-});
+function onModelLoaded(): void {
+  modelLoaded.value = true;
+  errorMessage.value = '';
+}
+
+function onModelError(message: string): void {
+  modelLoaded.value = false;
+  errorMessage.value = message;
+}
+
+function onFps(value: number): void {
+  fps.value = value;
+}
 
 /** 窗口拖拽（通过 Tauri IPC） */
 async function onDragStart(): Promise<void> {
@@ -38,7 +45,12 @@ async function onDragStart(): Promise<void> {
     </div>
 
     <!-- 3D 角色画布（Renderer Agent 创建） -->
-    <CharacterCanvas ref="characterCanvas" />
+    <CharacterCanvas
+      ref="characterCanvas"
+      @loaded="onModelLoaded"
+      @error="onModelError"
+      @fps="onFps"
+    />
 
     <!-- 对话气泡插槽 -->
     <slot name="chat" />
@@ -47,6 +59,7 @@ async function onDragStart(): Promise<void> {
     <ControlPanel
       :fps="fps"
       :model-loaded="modelLoaded"
+      :expression-module="characterCanvasRef?.getExpressionModule() ?? null"
     />
   </main>
 </template>

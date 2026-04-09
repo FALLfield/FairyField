@@ -19,6 +19,12 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const isLoading = ref(true);
 const errorMessage = ref('');
 
+const emit = defineEmits<{
+  (e: 'loaded'): void;
+  (e: 'error', message: string): void;
+  (e: 'fps', fps: number): void;
+}>();
+
 let rendererInstance: VRMRenderer | null = null;
 let expressionModule: ExpressionModule | null = null;
 let lipSyncModule: LipSyncModule | null = null;
@@ -26,7 +32,7 @@ let eyeTrackModule: EyeTrackModule | null = null;
 let tickFrameId: number | null = null;
 const emotionEngine = createEmotionEngine();
 
-const DEFAULT_MODEL_URL = '/models/default/2031903848872972972007.glb';
+const DEFAULT_MODEL_URL = '/models/default/2031903848872972007.glb';
 
 onMounted(async () => {
   if (!canvasRef.value) {
@@ -39,6 +45,7 @@ onMounted(async () => {
     rendererInstance = new VRMRenderer(canvasRef.value);
     await rendererInstance.loadVRM(DEFAULT_MODEL_URL);
     isLoading.value = false;
+    emit('loaded');
 
     // 初始化 Phase 1 模块
     expressionModule = new ExpressionModule(rendererInstance);
@@ -50,6 +57,8 @@ onMounted(async () => {
 
     // 模块 tick 循环
     let lastTime = performance.now();
+    let frameCount = 0;
+    let fpsTime = performance.now();
     const tick = (now: number): void => {
       const delta = (now - lastTime) / 1000;
       lastTime = now;
@@ -58,6 +67,14 @@ onMounted(async () => {
       lipSyncModule?.tick();
       emotionEngine.tick();
 
+      // 每秒统计 FPS
+      frameCount++;
+      if (now - fpsTime >= 1000) {
+        emit('fps', frameCount);
+        frameCount = 0;
+        fpsTime = now;
+      }
+
       tickFrameId = requestAnimationFrame(tick);
     };
     tickFrameId = requestAnimationFrame(tick);
@@ -65,6 +82,7 @@ onMounted(async () => {
     const message = error instanceof Error ? error.message : String(error);
     errorMessage.value = `VRM 加载失败: ${message}`;
     isLoading.value = false;
+    emit('error', errorMessage.value);
   }
 });
 

@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import type { ExpressionModule } from '../modules/ExpressionModule';
 
 interface ControlPanelProps {
   fps: number;
   modelLoaded: boolean;
+  expressionModule: ExpressionModule | null;
 }
 
-defineProps<ControlPanelProps>();
+const props = defineProps<ControlPanelProps>();
 
 const collapsed = ref(false);
 
 function toggleCollapse(): void {
   collapsed.value = !collapsed.value;
+}
+
+function triggerExpression(name: string): void {
+  if (props.expressionModule) {
+    props.expressionModule.setExpression(name, 1.0);
+  }
 }
 </script>
 
@@ -49,6 +57,21 @@ function toggleCollapse(): void {
         <span class="value">
           {{ modelLoaded ? '已加载' : '加载中...' }}
         </span>
+      </div>
+
+      <!-- 表情控制 -->
+      <div v-if="modelLoaded" class="section">
+        <span class="label">表情</span>
+        <div class="expr-buttons">
+          <button @click="triggerExpression('happy')">开心</button>
+          <button @click="triggerExpression('sad')">难过</button>
+          <button @click="triggerExpression('angry')">生气</button>
+          <button @click="triggerExpression('surprised')">惊讶</button>
+          <button @click="triggerExpression('laugh')">笑</button>
+          <button @click="triggerExpression('shy')">害羞</button>
+          <button @click="triggerExpression('upset')">不高兴</button>
+          <button @click="triggerExpression('neutral')">平静</button>
+        </div>
       </div>
     </div>
   </aside>
@@ -147,6 +170,33 @@ function toggleCollapse(): void {
 
 .value {
   color: #d4d4d4;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.expr-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.expr-buttons button {
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #d4d4d4;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.expr-buttons button:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 @keyframes pulse {

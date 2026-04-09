@@ -33,6 +33,13 @@ vi.mock('three', () => ({
   AmbientLight: vi.fn().mockImplementation(function () {}),
   ACESFilmicToneMapping: 4,
   SRGBColorSpace: 'srgb',
+  Box3: vi.fn().mockImplementation(function () {
+    return {
+      setFromObject: vi.fn().mockReturnThis(),
+      getSize: vi.fn(() => ({ x: 1, y: 1.5, z: 1 })),
+      getCenter: vi.fn(() => ({ x: 0, y: 0.8, z: 0 })),
+    };
+  }),
 }));
 
 // Mock GLTFLoader
@@ -60,6 +67,25 @@ describe('VRMRenderer', () => {
     canvas.height = 600;
     document.body.appendChild(canvas);
     vi.clearAllMocks();
+
+    // jsdom 不提供 matchMedia，手动 mock
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    Object.defineProperty(window, 'devicePixelRatio', {
+      writable: true,
+      value: 1,
+    });
   });
 
   afterEach(() => {
