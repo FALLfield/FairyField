@@ -175,16 +175,28 @@ export class VRMRenderer {
   }
 
   /**
-   * 设置口型同步值
+   * 设置口型同步值（快捷方式，仅设置 'aa'）
    * @param value - 嘴巴张开程度 0-1
    */
   setLipSync(value: number): void {
     if (!this.vrm) {
       return;
     }
-    // VRM 标准使用 'aa' BlendShape 控制嘴巴张开
     const clampedValue = Math.max(0, Math.min(1, value));
     this.vrm.expressionManager?.setValue('aa', clampedValue);
+  }
+
+  /**
+   * 设置指定口型 BlendShape 的值
+   * @param shape - 口型名称（'aa', 'ih', 'ou', 'ee', 'oh'）
+   * @param value - 权重 0-1
+   */
+  setLipSyncValue(shape: string, value: number): void {
+    if (!this.vrm) {
+      return;
+    }
+    const clampedValue = Math.max(0, Math.min(1, value));
+    this.vrm.expressionManager?.setValue(shape, clampedValue);
   }
 
   /**

@@ -2,21 +2,28 @@
 /**
  * CharacterCanvas - Three.js + VRM 角色渲染容器
  *
- * 作为顶层 Vue 组件，管理 VRMRenderer 的生命周期：
- * - onMounted: 创建 VRMRenderer，加载默认 VRM 模型
- * - onUnmounted: dispose 释放所有资源
- *
- * 通过 defineExpose 暴露 getRenderer()，供父组件和模块使用。
+ * 管理渲染器和所有 Phase 1 模块的生命周期：
+ * - VRMRenderer: 核心 3D 渲染
+ * - ExpressionModule: 表情管理
+ * - LipSyncModule: 口型同步
+ * - EyeTrackModule: 眼神跟随
  */
 import { ref, onMounted, onUnmounted } from 'vue';
 import { VRMRenderer } from '../renderers/VRMRenderer';
+import { ExpressionModule } from '../modules/ExpressionModule';
+import { LipSyncModule } from '../modules/LipSyncModule';
+import { EyeTrackModule } from '../modules/EyeTrackModule';
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const isLoading = ref(true);
 const errorMessage = ref('');
-let rendererInstance: VRMRenderer | null = null;
 
-/** 默认 VRM 模型路径（可在 public/models/default/ 下放置测试模型） */
+let rendererInstance: VRMRenderer | null = null;
+let expressionModule: ExpressionModule | null = null;
+let lipSyncModule: LipSyncModule | null = null;
+let eyeTrackModule: EyeTrackModule | null = null;
+let tickFrameId: number | null = null;
+
 const DEFAULT_MODEL_URL = '/models/default/2031903848872972972007.glb';
 
 onMounted(async () => {
@@ -30,6 +37,27 @@ onMounted(async () => {
     rendererInstance = new VRMRenderer(canvasRef.value);
     await rendererInstance.loadVRM(DEFAULT_MODEL_URL);
     isLoading.value = false;
+
+    // 初始化 Phase 1 模块
+    expressionModule = new ExpressionModule(rendererInstance);
+    lipSyncModule = new LipSyncModule(rendererInstance);
+    eyeTrackModule = new EyeTrackModule(rendererInstance);
+
+    expressionModule.start();
+    eyeTrackModule.start();
+
+    // 模块 tick 循环
+    let lastTime = performance.now();
+    const tick = (now: number): void => {
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
+      expressionModule?.tick(delta);
+      lipSyncModule?.tick();
+
+      tickFrameId = requestAnimationFrame(tick);
+    };
+    tickFrameId = requestAnimationFrame(tick);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     errorMessage.value = `VRM 加载失败: ${message}`;
@@ -38,20 +66,37 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  if (tickFrameId !== null) {
+    cancelAnimationFrame(tickFrameId);
+  }
+
+  eyeTrackModule?.stop();
+  lipSyncModule?.dispose();
+  expressionModule?.stop();
   rendererInstance?.dispose();
+
   rendererInstance = null;
+  expressionModule = null;
+  lipSyncModule = null;
+  eyeTrackModule = null;
 });
 
-/**
- * 获取 VRMRenderer 实例
- * 供父组件、眼神跟随、表情管理等模块使用
- */
 function getRenderer(): VRMRenderer | null {
   return rendererInstance;
 }
 
+function getExpressionModule(): ExpressionModule | null {
+  return expressionModule;
+}
+
+function getLipSyncModule(): LipSyncModule | null {
+  return lipSyncModule;
+}
+
 defineExpose({
   getRenderer,
+  getExpressionModule,
+  getLipSyncModule,
   isLoading,
   errorMessage,
 });
@@ -59,17 +104,14 @@ defineExpose({
 
 <template>
   <div class="character-canvas">
-    <!-- 加载指示 -->
     <div v-if="isLoading" class="character-canvas__overlay">
       <p>正在加载角色模型...</p>
     </div>
 
-    <!-- 错误提示 -->
     <div v-if="errorMessage" class="character-canvas__overlay character-canvas__overlay--error">
       <p>{{ errorMessage }}</p>
     </div>
 
-    <!-- Three.js 渲染画布 -->
     <canvas
       ref="canvasRef"
       class="character-canvas__canvas"

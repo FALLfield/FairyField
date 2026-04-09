@@ -4,8 +4,6 @@
 //! - 主要对话 Agent（primary）
 //! - 委托管理器（delegation）
 //! - 工具执行 Agent（tool_agent）
-//!
-//! Phase 3 实现目标。
 
 pub mod delegation;
 pub mod primary;
