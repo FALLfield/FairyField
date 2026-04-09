@@ -13,3 +13,4 @@ export { HitTestModule } from './HitTestModule';
 export { LipSyncModule } from './LipSyncModule';
 export { ExpressionModule } from './ExpressionModule';
 export type { ExpressionName } from './ExpressionModule';
+export { IdleAnimation } from './IdleAnimation';

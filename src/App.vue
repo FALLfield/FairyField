@@ -2,7 +2,6 @@
 import { ref, useTemplateRef } from 'vue';
 import CharacterCanvas from './components/CharacterCanvas.vue';
 import ControlPanel from './components/ControlPanel.vue';
-import { startDrag as tauriStartDrag } from './lib/tauri-commands';
 
 const characterCanvasRef = useTemplateRef<InstanceType<typeof CharacterCanvas>>('characterCanvas');
 
@@ -23,22 +22,10 @@ function onModelError(message: string): void {
 function onFps(value: number): void {
   fps.value = value;
 }
-
-/** 窗口拖拽（通过 Tauri IPC） */
-async function onDragStart(): Promise<void> {
-  try {
-    await tauriStartDrag();
-  } catch {
-    // 非 Tauri 环境下忽略
-  }
-}
 </script>
 
 <template>
-  <main
-    class="app-root"
-    @mousedown="onDragStart"
-  >
+  <main class="app-root">
     <!-- 加载/错误提示（CharacterCanvas 内部已有，此处作为全局兜底） -->
     <div v-if="errorMessage" class="status-overlay status-error">
       <p>{{ errorMessage }}</p>

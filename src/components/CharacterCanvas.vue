@@ -13,7 +13,10 @@ import { VRMRenderer } from '../renderers/VRMRenderer';
 import { ExpressionModule } from '../modules/ExpressionModule';
 import { LipSyncModule } from '../modules/LipSyncModule';
 import { EyeTrackModule } from '../modules/EyeTrackModule';
+import { IdleAnimation } from '../modules/IdleAnimation';
+import { HitTestModule } from '../modules/HitTestModule';
 import { createEmotionEngine } from '../lib/emotion-engine';
+import { invoke } from '@tauri-apps/api/core';
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const isLoading = ref(true);
@@ -29,7 +32,10 @@ let rendererInstance: VRMRenderer | null = null;
 let expressionModule: ExpressionModule | null = null;
 let lipSyncModule: LipSyncModule | null = null;
 let eyeTrackModule: EyeTrackModule | null = null;
+let idleAnimation: IdleAnimation | null = null;
+let hitTestModule: HitTestModule | null = null;
 let tickFrameId: number | null = null;
+let mouseDownHandler: ((e: MouseEvent) => void) | null = null;
 const emotionEngine = createEmotionEngine();
 
 const DEFAULT_MODEL_URL = '/models/default/2031903848872972007.glb';
@@ -51,9 +57,30 @@ onMounted(async () => {
     expressionModule = new ExpressionModule(rendererInstance);
     lipSyncModule = new LipSyncModule(rendererInstance);
     eyeTrackModule = new EyeTrackModule(rendererInstance);
+    idleAnimation = new IdleAnimation(rendererInstance);
+    hitTestModule = new HitTestModule(rendererInstance);
 
     expressionModule.start();
     eyeTrackModule.start();
+    idleAnimation.start();
+
+    // 点击策略：角色上拖动窗口，透明区域短暂穿透
+    const handleMouseDown = (e: MouseEvent): void => {
+      const hit = hitTestModule?.isHit(e.clientX, e.clientY) ?? false;
+      if (hit) {
+        // 命中角色 → 拖动窗口
+        invoke('start_drag').catch(() => {});
+      } else {
+        // 透明区域 → 短暂穿透让点击传递到下层应用
+        invoke('set_ignore_cursor_events', { ignore: true }).catch(() => {});
+        setTimeout(() => {
+          invoke('set_ignore_cursor_events', { ignore: false }).catch(() => {});
+        }, 100);
+      }
+    };
+
+    mouseDownHandler = handleMouseDown;
+    window.addEventListener('mousedown', handleMouseDown);
 
     // 模块 tick 循环
     let lastTime = performance.now();
@@ -65,6 +92,7 @@ onMounted(async () => {
 
       expressionModule?.tick(delta);
       lipSyncModule?.tick();
+      idleAnimation?.tick(delta);
       emotionEngine.tick();
 
       // 每秒统计 FPS
@@ -92,14 +120,22 @@ onUnmounted(() => {
   }
 
   eyeTrackModule?.stop();
+  idleAnimation?.stop();
   lipSyncModule?.dispose();
   expressionModule?.stop();
+
+  // 移除鼠标事件
+  if (mouseDownHandler) window.removeEventListener('mousedown', mouseDownHandler);
+
   rendererInstance?.dispose();
 
   rendererInstance = null;
   expressionModule = null;
   lipSyncModule = null;
   eyeTrackModule = null;
+  idleAnimation = null;
+  hitTestModule = null;
+  mouseDownHandler = null;
 });
 
 function getRenderer(): VRMRenderer | null {
