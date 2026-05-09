@@ -29,4 +29,19 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'three-vrm': ['@pixiv/three-vrm'],
+          'vendor': ['vue', '@tauri-apps/api'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 500,
+    target: 'esnext',
+    minify: 'esbuild',
+  },
 }));

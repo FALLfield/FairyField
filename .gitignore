@@ -74,3 +74,14 @@ public/models/default/model3.json
 !public/models/default/download-sample-model.sh
 !public/models/default/model3.json.example
 !public/models/default/INTEGRATION_TEST.md
+
+# VRM / GLB 3D model files (use Git LFS or download separately)
+*.glb
+*.vrm
+public/models/default/*.glb
+public/models/default/*.vrm
+
+# sherpa-onnx downloaded models
+models/
+
+.env

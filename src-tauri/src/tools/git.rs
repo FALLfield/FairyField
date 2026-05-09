@@ -14,17 +14,24 @@ impl GitTool {
     pub fn new() -> Self {
         Self {
             allowed_commands: vec![
-                "status", "log", "diff", "branch", "remote",
-                "show", "tag", "stash list", "config --list",
+                "status",
+                "log",
+                "diff",
+                "branch",
+                "remote",
+                "show",
+                "tag",
+                "stash list",
+                "config --list",
             ],
         }
     }
 
     /// 检查 git 子命令是否允许
     pub fn is_subcommand_allowed(&self, subcmd: &str) -> bool {
-        self.allowed_commands.iter().any(|&allowed| {
-            subcmd == allowed || subcmd.starts_with(&format!("{allowed} "))
-        })
+        self.allowed_commands
+            .iter()
+            .any(|&allowed| subcmd == allowed || subcmd.starts_with(&format!("{allowed} ")))
     }
 }
 
@@ -46,11 +53,17 @@ impl Tool for GitTool {
         self.is_subcommand_allowed(subcmd)
     }
 
-    fn execute(&self, input: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, ToolError>> + Send + '_>> {
+    fn execute(
+        &self,
+        input: &str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, ToolError>> + Send + '_>>
+    {
         let cmd = input.to_string();
         Box::pin(async move {
             // Phase 3 实现：使用 tokio::process::Command 执行 git 命令
-            Err(ToolError::ExecutionFailed(format!("Git 执行尚未实现: {cmd}")))
+            Err(ToolError::ExecutionFailed(format!(
+                "Git 执行尚未实现: {cmd}"
+            )))
         })
     }
 }

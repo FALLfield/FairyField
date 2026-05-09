@@ -7,8 +7,9 @@
  * - ExpressionModule: 表情管理
  * - LipSyncModule: 口型同步
  * - EyeTrackModule: 眼神跟随
+ * - EmotionEngine: 情绪引擎（驱动表情 + 影响嘴型）
  */
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { VRMRenderer } from '../renderers/VRMRenderer';
 import { ExpressionModule } from '../modules/ExpressionModule';
 import { LipSyncModule } from '../modules/LipSyncModule';
@@ -16,7 +17,15 @@ import { EyeTrackModule } from '../modules/EyeTrackModule';
 import { IdleAnimation } from '../modules/IdleAnimation';
 import { HitTestModule } from '../modules/HitTestModule';
 import { createEmotionEngine } from '../lib/emotion-engine';
+import type { EmotionWeights, Emotion } from '../lib/emotion-engine';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+
+const props = withDefaults(defineProps<{
+  emotion?: string;
+}>(), {
+  emotion: 'neutral',
+});
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const isLoading = ref(true);
@@ -36,126 +45,209 @@ let idleAnimation: IdleAnimation | null = null;
 let hitTestModule: HitTestModule | null = null;
 let tickFrameId: number | null = null;
 let mouseDownHandler: ((e: MouseEvent) => void) | null = null;
+let emotionUnlisten: (() => void) | null = null;
+let pcmUnlisten: (() => void) | null = null;
+let ttsStartUnlisten: (() => void) | null = null;
+let ttsFinishUnlisten: (() => void) | null = null;
 const emotionEngine = createEmotionEngine();
+
+/** TTS 播放状态（由 tts-started/tts-finished 事件驱动） */
+let isTtsSpeaking = false;
+/** TTS 模拟口型的时间累加器 */
+let ttsMouthTime = 0;
+
+// Watch emotion prop from parent and forward to EmotionEngine
+watch(() => props.emotion, (newEmotion) => {
+  if (newEmotion) {
+    emotionEngine.setEmotion(newEmotion as Emotion);
+  }
+});
 
 const DEFAULT_MODEL_URL = '/models/default/2031903848872972007.glb';
 
 onMounted(async () => {
-  if (!canvasRef.value) {
-    errorMessage.value = 'Canvas 元素未找到';
-    isLoading.value = false;
-    return;
-  }
+    if (!canvasRef.value) {
+        errorMessage.value = 'Canvas 元素未找到';
+        isLoading.value = false;
+        return;
+    }
 
-  try {
-    rendererInstance = new VRMRenderer(canvasRef.value);
-    await rendererInstance.loadVRM(DEFAULT_MODEL_URL);
-    isLoading.value = false;
-    emit('loaded');
+    try {
+        rendererInstance = new VRMRenderer(canvasRef.value);
+        await rendererInstance.loadVRM(DEFAULT_MODEL_URL);
+        isLoading.value = false;
+        emit('loaded');
 
-    // 初始化 Phase 1 模块
-    expressionModule = new ExpressionModule(rendererInstance);
-    lipSyncModule = new LipSyncModule(rendererInstance);
-    eyeTrackModule = new EyeTrackModule(rendererInstance);
-    idleAnimation = new IdleAnimation(rendererInstance);
-    hitTestModule = new HitTestModule(rendererInstance);
+        // 初始化 Phase 1 模块
+        expressionModule = new ExpressionModule(rendererInstance);
+        lipSyncModule = new LipSyncModule(rendererInstance);
+        eyeTrackModule = new EyeTrackModule(rendererInstance);
+        idleAnimation = new IdleAnimation(rendererInstance);
+        hitTestModule = new HitTestModule(rendererInstance);
 
-    expressionModule.start();
-    eyeTrackModule.start();
-    idleAnimation.start();
+        // 绑定情绪引擎到表情模块
+        expressionModule.bindEmotionEngine(emotionEngine);
 
-    // 点击策略：角色上拖动窗口，透明区域短暂穿透
-    const handleMouseDown = (e: MouseEvent): void => {
-      const hit = hitTestModule?.isHit(e.clientX, e.clientY) ?? false;
-      if (hit) {
-        // 命中角色 → 拖动窗口
-        invoke('start_drag').catch(() => {});
-      } else {
-        // 透明区域 → 短暂穿透让点击传递到下层应用
-        invoke('set_ignore_cursor_events', { ignore: true }).catch(() => {});
-        setTimeout(() => {
-          invoke('set_ignore_cursor_events', { ignore: false }).catch(() => {});
-        }, 100);
-      }
-    };
+        expressionModule.start();
+        eyeTrackModule.start();
+        idleAnimation.start();
 
-    mouseDownHandler = handleMouseDown;
-    window.addEventListener('mousedown', handleMouseDown);
+        // 监听 Tauri 事件：情绪状态更新（由 soul Agent 发送）
+        emotionUnlisten = await listen<EmotionWeights>('emotion-update', (event) => {
+            emotionEngine.setWeights(event.payload);
+        }).catch(() => null as (() => void) | null);
 
-    // 模块 tick 循环
-    let lastTime = performance.now();
-    let frameCount = 0;
-    let fpsTime = performance.now();
-    const tick = (now: number): void => {
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
+        // 监听 Tauri 事件：PCM 音频数据（由 voice Agent 发送）
+        pcmUnlisten = await listen<ArrayBuffer>('audio-pcm', (event) => {
+            if (lipSyncModule?.isActive()) {
+                const pcm = new Float32Array(event.payload);
+                lipSyncModule.feedPCM(pcm, 16000);
+            }
+        }).catch(() => null as (() => void) | null);
 
-      expressionModule?.tick(delta);
-      lipSyncModule?.tick();
-      idleAnimation?.tick(delta);
-      emotionEngine.tick();
+        // 监听 TTS 开始/结束，驱动口型
+        ttsStartUnlisten = await listen('tts-started', () => {
+            isTtsSpeaking = true;
+            ttsMouthTime = 0;
+        }).catch(() => null as (() => void) | null);
+        ttsFinishUnlisten = await listen('tts-finished', () => {
+            isTtsSpeaking = false;
+            ttsMouthTime = 0;
+        }).catch(() => null as (() => void) | null);
 
-      // 每秒统计 FPS
-      frameCount++;
-      if (now - fpsTime >= 1000) {
-        emit('fps', frameCount);
-        frameCount = 0;
-        fpsTime = now;
-      }
+        // 点击策略：角色上拖动窗口，透明区域短暂穿透
+        const handleMouseDown = (e: MouseEvent): void => {
+            const hit = hitTestModule?.isHit(e.clientX, e.clientY) ?? false;
+            if (hit) {
+                // 命中角色 → 拖动窗口
+                invoke('start_drag').catch(() => {});
+            } else {
+                // 透明区域 → 短暂穿透让点击传递到下层应用
+                invoke('set_ignore_cursor_events', { ignore: true }).catch(() => {});
+                setTimeout(() => {
+                    invoke('set_ignore_cursor_events', { ignore: false }).catch(() => {});
+                }, 100);
+            }
+        };
 
-      tickFrameId = requestAnimationFrame(tick);
-    };
-    tickFrameId = requestAnimationFrame(tick);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    errorMessage.value = `VRM 加载失败: ${message}`;
-    isLoading.value = false;
-    emit('error', errorMessage.value);
-  }
+        mouseDownHandler = handleMouseDown;
+        window.addEventListener('mousedown', handleMouseDown);
+
+        // 模块 tick 循环
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fpsTime = performance.now();
+        const tick = (now: number): void => {
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+
+            // 情绪引擎 tick（驱动衰减和过渡）
+            emotionEngine.tick(delta);
+
+            // LipSync tick（从 AnalyserNode 读取频谱）
+            lipSyncModule?.tick();
+
+            // 同步 LipSync 说话状态到 ExpressionModule
+            // 合并两个来源：PCM 驱动的 lipSync + TTS 事件驱动
+            const lipSpeaking = lipSyncModule?.isSpeaking() ?? false;
+            const speaking = lipSpeaking || isTtsSpeaking;
+            expressionModule?.setSpeaking(speaking);
+
+            // TTS 播放时模拟口型（MacSayTts 不提供 PCM 数据，需要模拟）
+            if (isTtsSpeaking && !lipSpeaking) {
+                ttsMouthTime += delta;
+                // 使用多频率正弦波模拟自然说话的嘴型
+                const mouthOpen = 0.3 + 0.4 * Math.abs(Math.sin(ttsMouthTime * 8));
+                const mouthWidth = 0.2 + 0.2 * Math.abs(Math.sin(ttsMouthTime * 5.3));
+                lipSyncModule?.setSimulatedMouth(mouthOpen, mouthWidth);
+            }
+
+            // 同步情绪对嘴型的影响到 LipSyncModule
+            const mouthInfluence = emotionEngine.computeMouthInfluence();
+            lipSyncModule?.setMouthInfluence(mouthInfluence);
+
+            // ExpressionModule tick（情绪驱动表情 + 手动过渡）
+            expressionModule?.tick(delta);
+
+            // IdleAnimation 和 EyeTrack
+            idleAnimation?.tick(delta);
+
+            // 每秒统计 FPS
+            frameCount++;
+            if (now - fpsTime >= 1000) {
+                emit('fps', frameCount);
+                frameCount = 0;
+                fpsTime = now;
+            }
+
+            tickFrameId = requestAnimationFrame(tick);
+        };
+        tickFrameId = requestAnimationFrame(tick);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        errorMessage.value = `VRM 加载失败: ${message}`;
+        isLoading.value = false;
+        emit('error', errorMessage.value);
+    }
 });
 
 onUnmounted(() => {
-  if (tickFrameId !== null) {
-    cancelAnimationFrame(tickFrameId);
-  }
+    if (tickFrameId !== null) {
+        cancelAnimationFrame(tickFrameId);
+    }
 
-  eyeTrackModule?.stop();
-  idleAnimation?.stop();
-  lipSyncModule?.dispose();
-  expressionModule?.stop();
+    // 取消 Tauri 事件监听
+    emotionUnlisten?.();
+    pcmUnlisten?.();
+    ttsStartUnlisten?.();
+    ttsFinishUnlisten?.();
 
-  // 移除鼠标事件
-  if (mouseDownHandler) window.removeEventListener('mousedown', mouseDownHandler);
+    eyeTrackModule?.stop();
+    idleAnimation?.stop();
+    lipSyncModule?.dispose();
+    expressionModule?.stop();
 
-  rendererInstance?.dispose();
+    // 移除鼠标事件
+    if (mouseDownHandler) window.removeEventListener('mousedown', mouseDownHandler);
 
-  rendererInstance = null;
-  expressionModule = null;
-  lipSyncModule = null;
-  eyeTrackModule = null;
-  idleAnimation = null;
-  hitTestModule = null;
-  mouseDownHandler = null;
+    rendererInstance?.dispose();
+
+    rendererInstance = null;
+    expressionModule = null;
+    lipSyncModule = null;
+    eyeTrackModule = null;
+    idleAnimation = null;
+    hitTestModule = null;
+    mouseDownHandler = null;
+    emotionUnlisten = null;
+    pcmUnlisten = null;
+    ttsStartUnlisten = null;
+    ttsFinishUnlisten = null;
 });
 
 function getRenderer(): VRMRenderer | null {
-  return rendererInstance;
+    return rendererInstance;
 }
 
 function getExpressionModule(): ExpressionModule | null {
-  return expressionModule;
+    return expressionModule;
 }
 
 function getLipSyncModule(): LipSyncModule | null {
-  return lipSyncModule;
+    return lipSyncModule;
+}
+
+function getEmotionEngine() {
+    return emotionEngine;
 }
 
 defineExpose({
-  getRenderer,
-  getExpressionModule,
-  getLipSyncModule,
-  isLoading,
-  errorMessage,
+    getRenderer,
+    getExpressionModule,
+    getLipSyncModule,
+    getEmotionEngine,
+    isLoading,
+    errorMessage,
 });
 </script>
 

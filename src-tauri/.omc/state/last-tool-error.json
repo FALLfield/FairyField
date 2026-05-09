@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"grep -l \\\"sherpa.onnx\\\" /Users/fallfield/Desktop/Projects/FairyField/FairyField/src-tauri/src/voice/tts.rs /Users/fallfield/Desktop/Projects/FairyField/FairyField/src-tauri/src/voice/asr.r...",
+  "error": "Exit code 1\n/Users/fallfield/Desktop/Projects/FairyField/FairyField/src-tauri/src/voice/tts.rs\n/Users/fallfield/Desktop/Projects/FairyField/FairyField/src-tauri/src/voice/asr.rs\n/Users/fallfield/Desktop/Projects/FairyField/FairyField/src-tauri/src/voice/vad.rs",
+  "timestamp": "2026-05-09T08:06:20.622Z",
+  "retry_count": 1
+}

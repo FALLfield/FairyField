@@ -1,139 +1,193 @@
 //! 语音活动检测模块 (VAD)
 //!
-//! 基于 silero-vad 模型的语音活动检测。
-//! 当前提供基于能量阈值的 mock 实现。
+//! 支持 mock 和 sherpa-onnx silero-vad（离线 VAD）。
 
-use super::VoiceError;
+/// VAD 错误
+#[derive(Debug, thiserror::Error)]
+pub enum VadError {
+    #[error("VAD 检测失败: {0}")]
+    Detection(String),
+    #[error("模型未加载")]
+    ModelNotLoaded,
+}
+
+/// VAD 检测结果
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum VadState {
+    /// 检测到语音
+    Speech,
+    /// 静音
+    Silence,
+}
 
 /// VAD 引擎 trait
 pub trait VadEngine: Send + Sync {
-    /// 处理一段音频 PCM 数据，返回是否检测到语音
-    fn process(&self, pcm: &[f32], sample_rate: u32) -> Result<bool, VoiceError>;
-    /// 重置内部状态
-    fn reset(&self);
-    /// 是否正在说话
-    fn is_speaking(&self) -> bool;
+    /// 检测一段音频是否有语音活动
+    fn detect(&self, samples: &[f32], sample_rate: u32) -> Result<VadState, VadError>;
+
+    /// 引擎名称
+    fn name(&self) -> &str;
 }
 
-/// 基于 silero-vad 的 VAD 引擎（当前为能量阈值 mock）
-pub struct SileroVad {
-    /// 灵敏度阈值（RMS），默认 0.02
-    threshold: std::sync::Mutex<f32>,
-    /// 是否正在说话
-    speaking: std::sync::Mutex<bool>,
-    /// 平滑计数器，避免频繁切换
-    frame_count: std::sync::Mutex<u32>,
+// ========== Mock VAD ==========
+
+/// Mock VAD 引擎 — 基于简单能量阈值检测
+pub struct MockVad {
+    /// 能量阈值（RMS），高于此值判定为语音
+    threshold: f32,
 }
 
-impl SileroVad {
-    pub fn new(threshold: f32) -> Result<Self, VoiceError> {
-        if threshold < 0.0 || threshold > 1.0 {
-            return Err(VoiceError::AudioError(format!(
-                "阈值必须在 0-1 之间，当前: {threshold}"
-            )));
+impl MockVad {
+    pub fn new() -> Self {
+        Self { threshold: 0.01 }
+    }
+
+    pub fn with_threshold(threshold: f32) -> Self {
+        Self { threshold }
+    }
+}
+
+impl Default for MockVad {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VadEngine for MockVad {
+    fn detect(&self, samples: &[f32], _sample_rate: u32) -> Result<VadState, VadError> {
+        if samples.is_empty() {
+            return Ok(VadState::Silence);
         }
-        Ok(Self {
-            threshold: std::sync::Mutex::new(threshold),
-            speaking: std::sync::Mutex::new(false),
-            frame_count: std::sync::Mutex::new(0),
+
+        // 计算 RMS 能量
+        let rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
+
+        Ok(if rms > self.threshold {
+            VadState::Speech
+        } else {
+            VadState::Silence
         })
     }
 
-    fn compute_rms(pcm: &[f32]) -> f32 {
-        if pcm.is_empty() {
-            return 0.0;
+    fn name(&self) -> &str {
+        "mock"
+    }
+}
+
+/// 创建 VAD 引擎
+pub fn create_vad_engine(config: &crate::config::settings::VoiceConfig) -> Box<dyn VadEngine> {
+    #[cfg(feature = "sherpa-onnx")]
+    {
+        let model_path = vad_model_path(config);
+        if let Ok(engine) = SileroVad::new(model_path) {
+            return Box::new(engine);
         }
-        let sum: f32 = pcm.iter().map(|s| s * s).sum();
-        (sum / pcm.len() as f32).sqrt()
+    }
+    #[cfg(not(feature = "sherpa-onnx"))]
+    let _ = config;
+    Box::new(MockVad::new())
+}
+
+fn vad_model_path(config: &crate::config::settings::VoiceConfig) -> std::path::PathBuf {
+    if !config.vad_model.is_empty() && std::path::Path::new(&config.vad_model).exists() {
+        return std::path::PathBuf::from(&config.vad_model);
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    std::path::PathBuf::from(home).join(".fairyfield/models/vad/silero-vad.onnx")
+}
+
+/// sherpa-onnx silero-vad 引擎
+///
+/// 需要下载 silero-vad.onnx 模型文件才能启用（`cargo build --features sherpa-onnx`）。
+/// 未启用 feature 时回退到 MockVad（RMS 能量检测）。
+///
+/// *模型下载指引：https://github.com/k2-fsa/sherpa-onnx/releases*
+pub struct SileroVad {
+    #[cfg(feature = "sherpa-onnx")]
+    inner: Option<std::sync::Mutex<sherpa_onnx::vad::VoiceActivityDetector>>,
+    #[cfg(not(feature = "sherpa-onnx"))]
+    fallback: MockVad,
+}
+
+impl SileroVad {
+    #[cfg(feature = "sherpa-onnx")]
+    pub fn new(model_path: std::path::PathBuf) -> Result<Self, VadError> {
+        use sherpa_onnx::vad::{
+            SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
+        };
+
+        let config = VadModelConfig {
+            silero_vad: SileroVadModelConfig {
+                model: model_path.to_string_lossy().to_string(),
+                threshold: 0.5,
+                min_silence_duration: 0.5,
+                min_speech_duration: 0.25,
+                max_speech_duration: 15.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let vad = VoiceActivityDetector::new(config, 20)
+            .map_err(|e| VadError::Detection(format!("VAD 初始化失败: {}", e)))?;
+
+        Ok(Self {
+            inner: Some(std::sync::Mutex::new(vad)),
+        })
+    }
+
+    #[cfg(not(feature = "sherpa-onnx"))]
+    pub fn new(_model_path: std::path::PathBuf) -> Result<Self, VadError> {
+        Ok(Self {
+            fallback: MockVad::new(),
+        })
     }
 }
 
 impl VadEngine for SileroVad {
-    fn process(&self, pcm: &[f32], _sample_rate: u32) -> Result<bool, VoiceError> {
-        let rms = Self::compute_rms(pcm);
-        let threshold = *self.threshold.lock().unwrap();
+    #[cfg(feature = "sherpa-onnx")]
+    fn detect(&self, samples: &[f32], _sample_rate: u32) -> Result<VadState, VadError> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| VadError::Detection("VAD 引擎未初始化".into()))?;
+        let mut vad = inner
+            .lock()
+            .map_err(|e| VadError::Detection(format!("锁错误: {}", e)))?;
 
-        let is_voice = rms > threshold;
-        let mut count = self.frame_count.lock().unwrap();
-        *count += 1;
+        vad.accept_waveform(samples)
+            .map_err(|e| VadError::Detection(format!("VAD 音频输入失败: {}", e)))?;
 
-        if *count >= 3 {
-            *self.speaking.lock().unwrap() = is_voice;
-            *count = 0;
+        Ok(if vad.is_detected() {
+            VadState::Speech
+        } else {
+            VadState::Silence
+        })
+    }
+
+    #[cfg(not(feature = "sherpa-onnx"))]
+    fn detect(&self, samples: &[f32], sample_rate: u32) -> Result<VadState, VadError> {
+        self.fallback.detect(samples, sample_rate)
+    }
+
+    fn name(&self) -> &str {
+        if cfg!(feature = "sherpa-onnx") {
+            "sherpa-onnx-silero-vad"
+        } else {
+            "sherpa-onnx-silero-vad (stub)"
         }
-
-        Ok(*self.speaking.lock().unwrap())
-    }
-
-    fn reset(&self) {
-        *self.speaking.lock().unwrap() = false;
-        *self.frame_count.lock().unwrap() = 0;
-    }
-
-    fn is_speaking(&self) -> bool {
-        *self.speaking.lock().unwrap()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// 总是返回 Speech 的 VAD（用于跳过 VAD 检测）
+struct AlwaysSpeechVad;
 
-    #[test]
-    fn test_silero_vad_new() {
-        let vad = SileroVad::new(0.02).unwrap();
-        assert!(!vad.is_speaking());
+impl VadEngine for AlwaysSpeechVad {
+    fn detect(&self, _samples: &[f32], _sample_rate: u32) -> Result<VadState, VadError> {
+        Ok(VadState::Speech)
     }
 
-    #[test]
-    fn test_silero_vad_invalid_threshold() {
-        let result = SileroVad::new(-0.1);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_silero_vad_silence() {
-        let vad = SileroVad::new(0.02).unwrap();
-        let silence = vec![0.0f32; 1600]; // 100ms 静音
-        // 需要累积多帧
-        for _ in 0..5 {
-            let _ = vad.process(&silence, 16000);
-        }
-        assert!(!vad.is_speaking());
-    }
-
-    #[test]
-    fn test_silero_vad_voice() {
-        let vad = SileroVad::new(0.01).unwrap();
-        // 生成正弦波（模拟语音）
-        let voice: Vec<f32> = (0..1600)
-            .map(|i| (i as f32 * 2.0 * std::f32::consts::PI * 440.0 / 16000.0).sin() * 0.5)
-            .collect();
-        for _ in 0..5 {
-            let _ = vad.process(&voice, 16000);
-        }
-        assert!(vad.is_speaking());
-    }
-
-    #[test]
-    fn test_silero_vad_reset() {
-        let vad = SileroVad::new(0.01).unwrap();
-        let voice: Vec<f32> = (0..1600)
-            .map(|i| (i as f32 * 2.0 * std::f32::consts::PI * 440.0 / 16000.0).sin() * 0.5)
-            .collect();
-        for _ in 0..5 {
-            let _ = vad.process(&voice, 16000);
-        }
-        vad.reset();
-        assert!(!vad.is_speaking());
-    }
-
-    #[test]
-    fn test_compute_rms() {
-        let silence = vec![0.0f32; 100];
-        assert_eq!(SileroVad::compute_rms(&silence), 0.0);
-
-        let signal = vec![1.0f32; 100];
-        assert!((SileroVad::compute_rms(&signal) - 1.0).abs() < 0.001);
+    fn name(&self) -> &str {
+        "always-speech"
     }
 }

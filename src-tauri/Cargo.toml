@@ -2,7 +2,7 @@
 name = "fairyfield"
 version = "0.1.0"
 description = "桌面全息 AI 伴侣应用"
-authors = ["you"]
+authors = ["FairyField Contributors"]
 edition = "2021"
 
 [lib]
@@ -22,14 +22,29 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "stream", "multipart"] }
+futures-util = "0.3"
+thiserror = "2"
+regex-lite = "0.1"
 
 # 持久化存储（Phase 2 启用）
 rusqlite = { version = "0.31", features = ["bundled"] }
+# 中文分词（jieba — 用于 FTS5 中文搜索优化）
+jieba-rs = "0.7"
 
 # ========== Phase 2 依赖（语音管道）==========
-# 启用 Phase 2 时取消注释：
-# sherpa-onnx = { version = "x.y", features = [...] }
+# 音频输出（跨平台，CoreAudio/PulseAudio/WASAPI）
+cpal = "0.15"
+# 使用 feature gate 控制 sherpa-onnx 真实实现。
+# 默认使用 mock 模式（无需下载原生库），启用真实模式请使用：
+#   cargo build --features sherpa-onnx
+sherpa-onnx = { version = "1.12", optional = true, default-features = true }
 
 # ========== Phase 3 依赖（AI 大脑）==========
 # 启用 Phase 3 时取消注释：
 # rig-core = "x.y"
+
+[features]
+default = []
+# 启用 sherpa-onnx 真实语音引擎（VAD/ASR/TTS）
+# 首次编译时会自动下载原生库（~200MB）
+sherpa-onnx = ["dep:sherpa-onnx"]

@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import type { ExpressionModule } from '../modules/ExpressionModule';
+import * as tauriCommands from '../lib/tauri-commands';
+import type { ProviderPreset } from '../lib/tauri-commands';
 
 interface ControlPanelProps {
   fps: number;
@@ -11,6 +13,10 @@ interface ControlPanelProps {
 const props = defineProps<ControlPanelProps>();
 
 const collapsed = ref(false);
+const providers = ref<ProviderPreset[]>([]);
+const activeProvider = ref<string>('');
+const switching = ref(false);
+const loadError = ref<string | null>(null);
 
 function toggleCollapse(): void {
   collapsed.value = !collapsed.value;
@@ -21,6 +27,41 @@ function triggerExpression(name: string): void {
     props.expressionModule.setExpression(name, 1.0);
   }
 }
+
+async function loadProviders(): Promise<void> {
+  loadError.value = null;
+  try {
+    const [list, active] = await Promise.all([
+      tauriCommands.llmListProviders(),
+      tauriCommands.llmGetActiveProvider(),
+    ]);
+    providers.value = list;
+    activeProvider.value = active.name;
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : String(e);
+    // 仅在 Tauri 环境下显示错误（浏览器环境 invoke 不可用是正常的）
+    if ((window as any).__TAURI_INTERNALS__) {
+      console.warn('LLM 提供商加载失败:', loadError.value);
+    }
+  }
+}
+
+async function switchProvider(name: string): Promise<void> {
+  if (name === activeProvider.value || switching.value) return;
+  switching.value = true;
+  try {
+    await tauriCommands.llmSwitchProvider(name);
+    activeProvider.value = name;
+  } catch (e) {
+    console.error('切换提供商失败:', e);
+  } finally {
+    switching.value = false;
+  }
+}
+
+onMounted(() => {
+  loadProviders();
+});
 </script>
 
 <template>
@@ -71,6 +112,35 @@ function triggerExpression(name: string): void {
           <button @click="triggerExpression('shy')">害羞</button>
           <button @click="triggerExpression('upset')">不高兴</button>
           <button @click="triggerExpression('neutral')">平静</button>
+        </div>
+      </div>
+
+      <!-- LLM 提供商切换 -->
+      <div class="section">
+        <span class="label">LLM</span>
+        <!-- 提供商按钮 -->
+        <div v-if="providers.length > 0" class="provider-buttons">
+          <button
+            v-for="p in providers"
+            :key="p.name"
+            :class="{ active: p.name === activeProvider }"
+            :disabled="switching"
+            @click="switchProvider(p.name)"
+          >
+            {{ p.name }}
+          </button>
+        </div>
+        <!-- 加载失败/无提供商 -->
+        <div v-else-if="loadError" class="provider-error">
+          加载失败: {{ loadError.substring(0, 60) }}
+          <button class="retry-btn" @click="loadProviders()">重试</button>
+        </div>
+        <div v-else class="provider-info">
+          加载中...
+        </div>
+        <!-- 活跃提供商模型信息 -->
+        <div v-if="activeProvider" class="provider-info">
+          {{ providers.find(p => p.name === activeProvider)?.model }}
         </div>
       </div>
     </div>
@@ -197,6 +267,67 @@ function triggerExpression(name: string): void {
 
 .expr-buttons button:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+.provider-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.provider-buttons button {
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #d4d4d4;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.provider-buttons button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.provider-buttons button.active {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.6);
+  color: #a5b4fc;
+}
+
+.provider-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.provider-info {
+  font-size: 10px;
+  color: #737373;
+  margin-top: 2px;
+}
+
+.provider-error {
+  font-size: 10px;
+  color: #f87171;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.retry-btn {
+  padding: 1px 6px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 3px;
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background: rgba(248, 113, 113, 0.2);
 }
 
 @keyframes pulse {

@@ -5,5 +5,7 @@
 pub mod settings;
 
 pub use settings::{
-    default_config, AppConfig, CharacterConfig, LlmConfig, VoiceConfig, WindowConfig,
+    config_dir, config_file_path, default_config, load_from_file, save_to_file, AppConfig,
+    CharacterConfig, GatewayConfig, LlmConfig, MemoryConfig, ProviderPreset, UiConfig, VoiceConfig,
+    WindowConfig,
 };

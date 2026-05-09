@@ -1,0 +1,4 @@
+{"t":0,"agent":"a3bc09d","agent_type":"general-purpose","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a9aa1a2","agent_type":"general-purpose","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a6a7fa8","agent_type":"general-purpose","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"system","event":"keyword_detected","keyword":"ultrathink"}

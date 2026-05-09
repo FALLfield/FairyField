@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 // ---------------------------------------------------------------------------
 // 类型定义
@@ -46,6 +47,7 @@ export interface CharacterConfig {
   model_path: string;
   default_expression: string;
   name: string;
+  soul_path: string;
 }
 
 /** 窗口配置 */
@@ -57,12 +59,38 @@ export interface WindowConfig {
   click_through: boolean;
 }
 
+/** 记忆系统配置 */
+export interface MemoryConfig {
+  db_path: string;
+  embedding_dim: number;
+  wakeup_max_tokens: number;
+  dedup_threshold: number;
+}
+
+/** 通信网关配置 */
+export interface GatewayConfig {
+  telegram_enabled: boolean;
+  telegram_token: string;
+  cron_enabled: boolean;
+}
+
+/** UI 配置 */
+export interface UiConfig {
+  chat_bubble_max_width: number;
+  message_font_size: number;
+  show_control_panel: boolean;
+  accent_color: string;
+}
+
 /** 应用配置 */
 export interface AppConfig {
   llm: LlmConfig;
   voice: VoiceConfig;
   character: CharacterConfig;
   window: WindowConfig;
+  memory: MemoryConfig;
+  gateway: GatewayConfig;
+  ui: UiConfig;
 }
 
 /** 流式回复事件 */
@@ -71,61 +99,168 @@ export interface StreamEvent {
   content: string;
 }
 
-// ---------------------------------------------------------------------------
-// AI Agent 命令
-// ---------------------------------------------------------------------------
+/** 情绪种类（对应 Rust EmotionKind） */
+export type EmotionKind =
+  | 'happy'
+  | 'sad'
+  | 'angry'
+  | 'surprised'
+  | 'neutral'
+  | 'thinking'
+  | 'excited'
+  | 'shy'
+  | 'upset';
 
-/** 发送聊天消息，返回完整回复 */
-export async function chat(message: string): Promise<string> {
-  return invoke<string>('chat', { message });
+/** 情绪状态（对应 Rust EmotionState） */
+export interface EmotionState {
+  /** 当前主情绪 */
+  current: EmotionKind;
+  /** 情绪强度 0.0 - 1.0 */
+  intensity: number;
+  /** 各情绪维度的原始值 */
+  values: Record<string, number>;
 }
 
-/** 发送聊天消息，返回流式回复（SSE） */
-export async function chatStream(
+/** AI 对话响应（对应 Rust ChatResponse） */
+export interface ChatResponse {
+  /** AI 回复文本（纯自然语言，不含情绪数据） */
+  reply: string;
+  /** 情绪状态 */
+  emotion: EmotionState;
+}
+
+/** LLM 提供商预设 */
+export interface ProviderPreset {
+  name: string;
+  provider_type: string;
+  api_endpoint: string;
+  model: string;
+  api_key: string;
+}
+
+// ---------------------------------------------------------------------------
+// AI Agent 命令（Phase 2 命名）
+// ---------------------------------------------------------------------------
+
+/** 发送聊天消息，返回回复和情绪 */
+export async function agentChat(message: string): Promise<ChatResponse> {
+  return invoke<ChatResponse>('agent_chat', { message });
+}
+
+/** 发送聊天消息，流式返回回复。返回后端 ChatResponse 含 emotion */
+export async function agentChatStream(
   message: string,
   onEvent: (event: StreamEvent) => void,
-): Promise<void> {
-  // TODO: Phase 3 — 使用 Tauri 事件监听实现 SSE
-  void message;
-  void onEvent;
+): Promise<ChatResponse> {
+  const unlistenToken = await listen<string>('agent:stream-token', (event) => {
+    onEvent({ type: 'chunk', content: event.payload });
+  });
+  const unlistenDone = await listen<void>('agent:stream-done', () => {
+    onEvent({ type: 'done', content: '' });
+  });
+
+  const response = await invoke<ChatResponse>('agent_chat_stream', { message });
+
+  unlistenToken();
+  unlistenDone();
+
+  return response;
 }
 
 /** 获取当前情绪状态 */
-export async function getEmotionState(): Promise<Emotion> {
-  return invoke<Emotion>('get_emotion_state');
+export async function agentGetEmotion(): Promise<EmotionState> {
+  return invoke<EmotionState>('agent_get_emotion');
 }
 
 // ---------------------------------------------------------------------------
-// 语音命令
+// LLM 提供商管理命令
 // ---------------------------------------------------------------------------
 
-/** 开始语音识别 */
-export async function startAsr(): Promise<void> {
-  return invoke<void>('start_asr');
+/** 列出所有可用的 LLM 提供商预设 */
+export async function llmListProviders(): Promise<ProviderPreset[]> {
+  return invoke<ProviderPreset[]>('llm_list_providers');
 }
 
-/** 开始语音合成，返回 PCM 音频数据 */
+/** 切换活跃的 LLM 提供商 */
+export async function llmSwitchProvider(name: string): Promise<void> {
+  return invoke<void>('llm_switch_provider', { name });
+}
+
+/** 获取当前活跃的 LLM 提供商 */
+export async function llmGetActiveProvider(): Promise<ProviderPreset> {
+  return invoke<ProviderPreset>('llm_get_active_provider');
+}
+
+// ---------------------------------------------------------------------------
+// 语音命令（Phase 2 命名）
+// ---------------------------------------------------------------------------
+
+/** 开始语音识别，返回识别到的文本 */
+export async function voiceStartAsr(): Promise<string> {
+  return invoke<string>('voice_start_asr');
+}
+
+/** 开始语音合成 */
+export async function voiceStartTts(text: string): Promise<void> {
+  return invoke<void>('voice_start_tts', { text });
+}
+
+/** 获取 VAD（语音活动检测）状态 */
+export async function voiceGetVadState(): Promise<boolean> {
+  return invoke<boolean>('voice_get_vad_state');
+}
+
+// ---------------------------------------------------------------------------
+// 配置命令（Phase 2 命名）
+// ---------------------------------------------------------------------------
+
+/** 加载应用配置 */
+export async function platformLoadConfig(): Promise<AppConfig> {
+  return invoke<AppConfig>('platform_load_config');
+}
+
+/** 保存应用配置 */
+export async function platformSaveConfig(config: AppConfig): Promise<void> {
+  return invoke<void>('platform_save_config', { config });
+}
+
+// ---------------------------------------------------------------------------
+// 兼容 Phase 0-1 命令别名
+// ---------------------------------------------------------------------------
+
+/** @deprecated 使用 agentChat */
+export async function chat(message: string): Promise<ChatResponse> {
+  return agentChat(message);
+}
+
+/** @deprecated 使用 agentGetEmotion */
+export async function getEmotionState(): Promise<EmotionState> {
+  return agentGetEmotion();
+}
+
+/** @deprecated 使用 voiceStartAsr */
+export async function startAsr(): Promise<string> {
+  return voiceStartAsr();
+}
+
+/** @deprecated 使用 voiceStartTts */
 export async function startTts(text: string): Promise<number[]> {
   return invoke<number[]>('start_tts', { text });
 }
 
-/** 获取 VAD（语音活动检测）状态 */
+/** @deprecated 使用 voiceGetVadState */
 export async function getVadState(): Promise<boolean> {
-  return invoke<boolean>('get_vad_state');
+  return voiceGetVadState();
 }
 
-// ---------------------------------------------------------------------------
-// 配置命令
-// ---------------------------------------------------------------------------
-
-/** 加载应用配置 */
+/** @deprecated 使用 platformLoadConfig */
 export async function loadConfig(): Promise<AppConfig> {
-  return invoke<AppConfig>('load_config');
+  return platformLoadConfig();
 }
 
-/** 保存应用配置 */
+/** @deprecated 使用 platformSaveConfig */
 export async function saveConfig(config: AppConfig): Promise<void> {
-  return invoke<void>('save_config', { config });
+  return platformSaveConfig(config);
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +276,7 @@ export async function startDrag(): Promise<void> {
 export async function setIgnoreCursorEvents(
   ignore: boolean,
 ): Promise<void> {
-  return invoke<void>('set_ignore_cursor', { ignore });
+  return invoke<void>('set_ignore_cursor_events', { ignore });
 }
 
 /** 获取窗口尺寸 */

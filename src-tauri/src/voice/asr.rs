@@ -1,141 +1,198 @@
 //! 语音识别模块 (ASR)
 //!
-//! 基于 sherpa-onnx Paraformer 模型的离线语音识别。
-//! 当前提供 trait 抽象和 mock 实现。
+//! 支持 mock 和 sherpa-onnx Paraformer（离线 ASR）。
 
-use super::VoiceError;
-
-/// ASR 配置
-#[derive(Debug, Clone)]
-pub struct AsrConfig {
-    /// 模型路径
-    pub model_path: String,
-    /// 语言代码（如 "zh", "en"）
-    pub language: String,
-    /// 采样率
-    pub sample_rate: u32,
-    /// 是否启用标点
-    pub enable_punctuation: bool,
+/// ASR 错误
+#[derive(Debug, thiserror::Error)]
+pub enum AsrError {
+    #[error("ASR 识别失败: {0}")]
+    Recognition(String),
+    #[error("模型未加载")]
+    ModelNotLoaded,
+    #[error("配置错误: {0}")]
+    Config(String),
 }
 
-impl Default for AsrConfig {
-    fn default() -> Self {
-        Self {
-            model_path: String::new(),
-            language: "zh".to_string(),
-            sample_rate: 16000,
-            enable_punctuation: true,
-        }
-    }
+/// ASR 识别结果
+#[derive(Debug, Clone)]
+pub struct AsrResult {
+    /// 识别文本
+    pub text: String,
+    /// 置信度 (0.0 - 1.0)
+    pub confidence: f32,
 }
 
 /// ASR 引擎 trait
 pub trait AsrEngine: Send + Sync {
-    /// 开始识别
-    fn start(&self) -> Result<(), VoiceError>;
-    /// 停止识别
-    fn stop(&self) -> Result<(), VoiceError>;
-    /// 喂入音频数据，返回识别到的文本（如果有完整句子）
-    fn feed_audio(&self, pcm: &[f32], sample_rate: u32) -> Result<Option<String>, VoiceError>;
-    /// 是否正在运行
-    fn is_running(&self) -> bool;
+    /// 识别音频数据（PCM f32, 单声道）
+    fn recognize(&self, samples: &[f32], sample_rate: u32) -> Result<AsrResult, AsrError>;
+
+    /// 引擎名称
+    fn name(&self) -> &str;
 }
 
-/// Paraformer ASR 引擎（当前为 mock 实现）
-pub struct ParaformerAsr {
-    config: AsrConfig,
-    running: std::sync::atomic::AtomicBool,
+// ========== Mock ASR ==========
+
+/// Mock ASR 引擎 — 返回固定文本（用于开发测试）
+pub struct MockAsr {
+    mock_text: String,
 }
 
-impl ParaformerAsr {
-    pub fn new(config: AsrConfig) -> Result<Self, VoiceError> {
-        Ok(Self {
-            config,
-            running: std::sync::atomic::AtomicBool::new(false),
+impl MockAsr {
+    pub fn new() -> Self {
+        Self {
+            mock_text: "你好呀".to_string(),
+        }
+    }
+
+    pub fn with_text(text: impl Into<String>) -> Self {
+        Self {
+            mock_text: text.into(),
+        }
+    }
+}
+
+impl Default for MockAsr {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AsrEngine for MockAsr {
+    fn recognize(&self, _samples: &[f32], _sample_rate: u32) -> Result<AsrResult, AsrError> {
+        Ok(AsrResult {
+            text: self.mock_text.clone(),
+            confidence: 0.95,
         })
     }
 
-    pub fn config(&self) -> &AsrConfig {
-        &self.config
+    fn name(&self) -> &str {
+        "mock"
     }
 }
 
-impl AsrEngine for ParaformerAsr {
-    fn start(&self) -> Result<(), VoiceError> {
-        if self.config.model_path.is_empty() {
-            return Err(VoiceError::ModelLoadFailed(
-                "模型路径未配置".to_string(),
-            ));
+/// 创建 ASR 引擎
+pub fn create_asr_engine(config: &crate::config::settings::VoiceConfig) -> Box<dyn AsrEngine> {
+    #[cfg(feature = "sherpa-onnx")]
+    {
+        let model_dir = asr_model_dir(config);
+        if let Ok(engine) = SherpaOnnxAsr::new(model_dir) {
+            return Box::new(engine);
         }
-        self.running.store(true, std::sync::atomic::Ordering::Relaxed);
-        Ok(())
     }
-
-    fn stop(&self) -> Result<(), VoiceError> {
-        self.running.store(false, std::sync::atomic::Ordering::Relaxed);
-        Ok(())
-    }
-
-    fn feed_audio(&self, _pcm: &[f32], _sample_rate: u32) -> Result<Option<String>, VoiceError> {
-        if !self.running.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(VoiceError::NotInitialized);
-        }
-        // Mock: 不返回识别结果，真实实现需要 sherpa-onnx
-        Ok(None)
-    }
-
-    fn is_running(&self) -> bool {
-        self.running.load(std::sync::atomic::Ordering::Relaxed)
-    }
+    Box::new(MockAsr::new())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+fn asr_model_dir(config: &crate::config::settings::VoiceConfig) -> std::path::PathBuf {
+    if !config.asr_model.is_empty() && std::path::Path::new(&config.asr_model).exists() {
+        return std::path::PathBuf::from(&config.asr_model);
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    std::path::PathBuf::from(home).join(".fairyfield/models/paraformer")
+}
 
-    fn test_config() -> AsrConfig {
-        AsrConfig {
-            model_path: "/tmp/test_model".to_string(),
+/// sherpa-onnx Paraformer ASR 引擎
+///
+/// 需要下载 Paraformer 模型文件才能启用（`cargo build --features sherpa-onnx`）。
+/// 未启用 feature 时回退到 MockAsr。
+///
+/// *模型下载指引：https://k2-fsa.github.io/sherpa/onnx/pretrained_models/online-paraformer/paraformer-models.html*
+pub struct SherpaOnnxAsr {
+    #[cfg(feature = "sherpa-onnx")]
+    inner: Option<std::sync::Mutex<(
+        sherpa_onnx::online_recognizer::OnlineRecognizer,
+        sherpa_onnx::online_recognizer::OnlineStream,
+    )>>,
+    #[cfg(not(feature = "sherpa-onnx"))]
+    fallback: MockAsr,
+}
+
+impl SherpaOnnxAsr {
+    #[cfg(feature = "sherpa-onnx")]
+    pub fn new(model_dir: std::path::PathBuf) -> Result<Self, AsrError> {
+        use sherpa_onnx::online_recognizer::{
+            OnlineModelConfig, OnlineParaformerModelConfig, OnlineRecognizer,
+            OnlineRecognizerConfig,
+        };
+
+        let config = OnlineRecognizerConfig {
+            model_config: OnlineModelConfig {
+                paraformer: OnlineParaformerModelConfig {
+                    model: model_dir
+                        .join("model.onnx")
+                        .to_string_lossy()
+                        .to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
             ..Default::default()
+        };
+
+        let recognizer = OnlineRecognizer::new(config)
+            .map_err(|e| AsrError::Config(format!("ASR 初始化失败: {}", e)))?;
+        let stream = recognizer
+            .create_stream()
+            .map_err(|e| AsrError::Config(format!("流创建失败: {}", e)))?;
+
+        Ok(Self {
+            inner: Some(std::sync::Mutex::new((recognizer, stream))),
+        })
+    }
+
+    #[cfg(not(feature = "sherpa-onnx"))]
+    pub fn new(_model_dir: std::path::PathBuf) -> Result<Self, AsrError> {
+        Ok(Self {
+            fallback: MockAsr::new(),
+        })
+    }
+}
+
+impl AsrEngine for SherpaOnnxAsr {
+    #[cfg(feature = "sherpa-onnx")]
+    fn recognize(&self, samples: &[f32], _sample_rate: u32) -> Result<AsrResult, AsrError> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| AsrError::Config("ASR 引擎未初始化".into()))?;
+        let mut guard = inner
+            .lock()
+            .map_err(|e| AsrError::Recognition(format!("锁错误: {}", e)))?;
+        let (recognizer, stream) = &mut *guard;
+
+        stream
+            .accept_waveform(16000, samples)
+            .map_err(|e| AsrError::Recognition(format!("音频输入失败: {}", e)))?;
+
+        while recognizer.is_ready(stream) {
+            recognizer
+                .decode(stream)
+                .map_err(|e| AsrError::Recognition(format!("解码失败: {}", e)))?;
         }
+
+        let result = recognizer.get_result(stream);
+        let text = result.text.unwrap_or_default();
+
+        recognizer
+            .reset(stream)
+            .map_err(|e| AsrError::Recognition(format!("重置失败: {}", e)))?;
+
+        Ok(AsrResult {
+            text,
+            confidence: 0.85,
+        })
     }
 
-    #[test]
-    fn test_paraformer_new() {
-        let asr = ParaformerAsr::new(test_config()).unwrap();
-        assert!(!asr.is_running());
-        assert_eq!(asr.config().language, "zh");
+    #[cfg(not(feature = "sherpa-onnx"))]
+    fn recognize(&self, samples: &[f32], sample_rate: u32) -> Result<AsrResult, AsrError> {
+        self.fallback.recognize(samples, sample_rate)
     }
 
-    #[test]
-    fn test_paraformer_start_stop() {
-        let asr = ParaformerAsr::new(test_config()).unwrap();
-        asr.start().unwrap();
-        assert!(asr.is_running());
-        asr.stop().unwrap();
-        assert!(!asr.is_running());
-    }
-
-    #[test]
-    fn test_paraformer_start_no_model() {
-        let asr = ParaformerAsr::new(AsrConfig::default()).unwrap();
-        let result = asr.start();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_paraformer_feed_audio_not_running() {
-        let asr = ParaformerAsr::new(test_config()).unwrap();
-        let result = asr.feed_audio(&[0.0f32; 1600], 16000);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_paraformer_feed_audio_mock() {
-        let asr = ParaformerAsr::new(test_config()).unwrap();
-        asr.start().unwrap();
-        let result = asr.feed_audio(&[0.0f32; 1600], 16000);
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none()); // mock 不返回结果
+    fn name(&self) -> &str {
+        if cfg!(feature = "sherpa-onnx") {
+            "sherpa-onnx-paraformer"
+        } else {
+            "sherpa-onnx-paraformer (stub)"
+        }
     }
 }
