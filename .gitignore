@@ -93,4 +93,10 @@ models/
 agentdb/
 *.db
 
+# Claude Code local config
+.claude/
+
+# Generated graph data
+graphify-out/
+
 .env
