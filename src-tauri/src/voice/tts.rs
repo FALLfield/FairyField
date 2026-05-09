@@ -333,6 +333,7 @@ pub fn create_tts_engine(config: &crate::config::settings::VoiceConfig) -> Box<d
 }
 
 /// 获取模型目录（优先环境变量，否则 ~/.fairyfield/models/）
+#[cfg(feature = "sherpa-onnx")]
 fn dirs_next_or_home(config: &crate::config::settings::VoiceConfig) -> std::path::PathBuf {
     if !config.tts_model.is_empty() {
         if let Some(parent) = std::path::Path::new(&config.tts_model).parent() {

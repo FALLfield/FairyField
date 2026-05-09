@@ -83,6 +83,7 @@ pub fn create_asr_engine(config: &crate::config::settings::VoiceConfig) -> Box<d
     Box::new(MockAsr::new())
 }
 
+#[cfg(feature = "sherpa-onnx")]
 fn asr_model_dir(config: &crate::config::settings::VoiceConfig) -> std::path::PathBuf {
     if !config.asr_model.is_empty() && std::path::Path::new(&config.asr_model).exists() {
         return std::path::PathBuf::from(&config.asr_model);

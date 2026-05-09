@@ -88,6 +88,7 @@ pub fn create_vad_engine(config: &crate::config::settings::VoiceConfig) -> Box<d
     Box::new(MockVad::new())
 }
 
+#[cfg(feature = "sherpa-onnx")]
 fn vad_model_path(config: &crate::config::settings::VoiceConfig) -> std::path::PathBuf {
     if !config.vad_model.is_empty() && std::path::Path::new(&config.vad_model).exists() {
         return std::path::PathBuf::from(&config.vad_model);

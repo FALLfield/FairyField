@@ -479,7 +479,7 @@ impl PrimaryAgent {
         }
 
         // 9. 后处理
-        self.mine_conversation();
+        self.mine_conversation().await;
 
         let emotion_state = self.emotion.lock().await.clone();
         Ok(ChatResponse {
