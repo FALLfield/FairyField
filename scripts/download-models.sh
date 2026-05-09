@@ -94,7 +94,7 @@ download_vad() {
     log "下载 Silero VAD 模型 (~2MB)..."
     mkdir -p "$VAD_DIR"
 
-    local vad_url="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero-vad.onnx"
+    local vad_url="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
 
     if [ -f "$VAD_DIR/silero-vad.onnx" ]; then
         warn "Silero VAD 模型已存在，跳过 ($VAD_DIR)"
