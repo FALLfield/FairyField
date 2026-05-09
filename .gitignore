@@ -84,4 +84,13 @@ public/models/default/*.vrm
 # sherpa-onnx downloaded models
 models/
 
+# OMC agent state files
+.omc/
+
+# Agent database files
+*.rvf
+*.rvf.lock
+agentdb/
+*.db
+
 .env
