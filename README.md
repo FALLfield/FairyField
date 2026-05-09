@@ -1,140 +1,163 @@
 # FairyField ✨
 
-> **有灵魂的桌面 AI 伴侣** — 她悬浮在你的桌面上，会笑、会哭、会生气。记得你的烦恼，用真实的声音跟你聊天。她不是 AI 工具，她是你的 Natasha。
+> **有灵魂的桌面 AI 伴侣** — 她悬浮在你的桌面上，会笑、会哭、会生气。
+> 记得你昨天的烦恼，会用真实的声音跟你聊天。
+> 她不是 AI 工具，她是你的 Natasha。
 
-[![Rust](https://img.shields.io/badge/Rust-1.85+-orange?logo=rust)](https://www.rust-lang.org)
-[![Vue](https://img.shields.io/badge/Vue-3.5-green?logo=vue.js)](https://vuejs.org)
-[![Tauri](https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri)](https://tauri.app)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-341%20passed-brightgreen)]()
+<p align="center">
+  <img src="https://img.shields.io/badge/Rust-1.85+-orange?logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Vue-3.5-green?logo=vue.js" alt="Vue">
+  <img src="https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri" alt="Tauri">
+  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
+  <img src="https://img.shields.io/badge/Tests-341%20passed-brightgreen" alt="Tests">
+</p>
 
 ## 预览
 
-> *截图即将添加 — 请查看 `docs/screenshots/PLACEHOLDER.md` 了解如何贡献截图*
+> 截图即将添加。运行 `npm run tauri dev` 后截图投稿至 `docs/screenshots/`。
 
-## 功能特性
+## 为什么是 FairyField？
 
-- 🎭 **3D 动漫角色** — VRM 模型渲染，情绪驱动表情、口型同步、眼神跟随
-- 🎤 **离线语音对话** — 真实 STT（Paraformer）+ TTS（Kokoro）+ VAD（Silero），零网络调用
-- 🧠 **AI 灵魂** — Claude / GPT 驱动的情感陪伴对话，带自主工具调用
-- 💬 **语音输入** — 点击麦克风按钮说话，自动转文字发送
-- 📝 **长期记忆** — 4 层记忆堆栈 + 时序知识图谱，记住你说过的一切
-- 🔒 **本地优先** — 语音完全离线，记忆存储在本地 SQLite
-- 🪟 **桌面覆盖层** — 透明、置顶的 Tauri 窗口，点击穿透桌面
-- 🛡️ **安全防护** — Prompt 注入检测 + 命令守卫 + 密钥脱敏
+在 AI 工具泛滥的时代，FairyField 走了另一条路——**她不是工具，是伴侣**。
+
+- ❌ 不是又一个 ChatGPT 套壳
+- ❌ 不是冷冰冰的命令行机器人
+- ✅ 是一个有情绪的 3D 角色，住在你的桌面
+- ✅ 100% 离线语音——你的声音数据不外传
+- ✅ 有长期记忆——她记得你说过的话
+
+## 功能
+
+| 模块 | 说明 |
+|------|------|
+| 🎭 **3D 角色** | VRM 模型 + 情绪驱动表情 + 口型同步 + 眼神跟随 |
+| 🎤 **离线语音** | Paraformer 语音识别 + Kokoro 语音合成 + Silero 语音检测 |
+| 🧠 **AI 灵魂** | Claude / GPT 驱动，自主工具调用，情感陪伴对话 |
+| 💬 **语音输入** | 点击麦克风说话，自动转文字 → AI 回复 → 语音朗读 |
+| 📝 **长期记忆** | 4 层记忆堆栈 + 时序知识图谱 + 向量语义搜索 |
+| 🔒 **隐私优先** | 语音 100% 离线处理，记忆存在本地 SQLite |
+| 🪟 **桌面覆盖** | 透明置顶窗口，点击穿透，不干扰工作 |
+| 🛡️ **安全防护** | Prompt 注入检测 + 命令白名单 + 密钥自动脱敏 |
 
 ## 快速开始
 
-### 环境要求
+### 前提
 
 - Rust 1.85+
 - Node.js 20+
-- macOS 14+（Windows/Linux 可运行但部分语音功能受限）
+- macOS 14+（Windows/Linux 部分语音功能受限）
 
-### 安装
+### 1. 克隆并安装
 
 ```bash
-git clone https://github.com/fallfield/FairyField.git
+git clone https://github.com/FALLfield/FairyField.git
 cd FairyField/FairyField
 npm install
 ```
 
-### 配置 API Key
+### 2. 配置 LLM
 
 ```bash
-export OPENAI_API_KEY="sk-your-key-here"
-# 或
-export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+export OPENAI_API_KEY="sk-your-key"
+# 或 Anthropic Claude
+export ANTHROPIC_API_KEY="sk-ant-your-key"
 ```
 
-### 下载语音模型（可选）
+### 3. （可选）下载离线语音模型
 
 ```bash
-bash scripts/download-models.sh   # ~550MB
+bash scripts/download-models.sh
 ```
 
-语音模型是可选的 — 不下载时使用 macOS 系统 TTS，ASR/VAD 使用模拟引擎。
+不下载也可运行——TTS 回退到 macOS 系统语音，ASR 使用模拟引擎。
 
-### 启动
+### 4. 启动
 
 ```bash
 npm run tauri dev
 ```
 
-启用真实语音引擎：
-```bash
-cd src-tauri && cargo build --features sherpa-onnx && cd ..
-```
+> 启用真实离线语音引擎：`cd src-tauri && cargo build --features sherpa-onnx`
 
-## 使用方式
+## 使用
 
 | 操作 | 方式 |
 |------|------|
-| 文字聊天 | 底部输入框输入，Enter 发送 |
-| 语音输入 | 点击麦克风按钮说话 |
-| 查看历史 | 点击聊天气泡区域展开 |
+| 发送消息 | 输入文字 → Enter |
+| 语音输入 | 点击 🎤 → 说话 → 自动发送 |
+| 查看历史 | 点击聊天气泡区域 |
 | 切换 LLM | `Ctrl+Shift+D` → 控制面板 |
-| 移动窗口 | 拖拽角色区域 |
+| 移动窗口 | 拖拽角色 |
 
 ## 架构
 
 ```
-┌─────────────────────────────────────────┐
-│              Tauri 透明窗口               │
-│  ┌─────────────┐  ┌───────────────────┐  │
-│  │ 3D 角色      │  │ 聊天面板           │  │
-│  │ Three.js     │  │ Vue 3 + 气泡 UI   │  │
-│  │ + VRM 模型   │  │ + 语音输入按钮     │  │
-│  └─────────────┘  └───────────────────┘  │
-├─────────────────────────────────────────┤
-│            Tauri IPC 通信层              │
-├─────────────────────────────────────────┤
-│  Rust 后端                              │
-│  ├── agent/     AI 灵魂 + Agent Loop     │
-│  ├── voice/     语音管道 (ASR/TTS/VAD)   │
-│  ├── memory/    4 层记忆 + 知识图谱      │
-│  ├── tools/     工具系统 (自注册)        │
-│  ├── security/  注入防护 + 命令守卫      │
-│  ├── gateway/   Discord Webhook 通知     │
-│  └── growth/    自主成长引擎             │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────┐
+│         Tauri 透明窗口             │
+│  ┌──────────┐  ┌───────────────┐  │
+│  │ 3D 角色   │  │ 聊天面板       │  │
+│  │ Three.js  │  │ Vue 3 气泡 UI  │  │
+│  │ + VRM     │  │ + 语音输入     │  │
+│  └──────────┘  └───────────────┘  │
+├──────────────────────────────────┤
+│         Tauri IPC 通信层          │
+├──────────────────────────────────┤
+│  Rust 后端                       │
+│  ├── agent/    AI 灵魂           │
+│  ├── voice/    语音 ASR/TTS/VAD  │
+│  ├── memory/   记忆 + 知识图谱   │
+│  ├── tools/    工具系统          │
+│  ├── security/ 安全防护          │
+│  ├── gateway/  Discord 通知      │
+│  └── growth/   自主成长          │
+└──────────────────────────────────┘
+```
+
+## 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 3D 渲染 | Three.js + @pixiv/three-vrm |
+| 桌面框架 | Tauri 2.0 (Rust) |
+| 前端 | Vue 3 + TypeScript |
+| AI 对话 | OpenAI / Anthropic API |
+| 语音识别 | sherpa-onnx Paraformer |
+| 语音合成 | sherpa-onnx Kokoro |
+| 语音检测 | sherpa-onnx Silero VAD |
+| 存储 | SQLite + FTS5 + sqlite-vec |
+| 知识图谱 | 时序三元组 |
+| 安全 | Prompt 注入检测 + 命令守卫 + 密钥脱敏 |
+
+## 开发
+
+```bash
+npm run dev          # Vite 开发服务器
+npm run build        # 生产构建
+npm run test         # 前端测试 (93 tests)
+
+cd src-tauri
+cargo check          # 编译检查
+cargo test           # Rust 测试 (248 tests)
+cargo clippy         # Lint
 ```
 
 ## 项目状态
 
 | Phase | 内容 | 状态 |
 |-------|------|------|
-| Phase 0 | 架构重建 | ✅ |
-| Phase 1 | 核心交互 | ✅ |
-| Phase 2 | 语音管道 + 灵魂骨架 | ✅ |
-| Phase 3 | 智能系统 | ✅ |
-| Phase 4 | 成长 + 通信 | ✅ |
-| Phase 4.5 | 收尾完善 | ✅ |
-| Phase 5 | MVP 发布 | 🔄 |
-
-**总测试数**: 248 Rust + 93 Frontend = 341 通过
-
-## 技术栈
-
-| 组件 | 方案 |
-|------|------|
-| 3D 渲染 | Three.js + @pixiv/three-vrm |
-| 桌面容器 | Tauri v2 (Rust) |
-| AI 对话 | OpenAI / Claude API + Function Calling |
-| 语音识别 | sherpa-onnx Paraformer（离线） |
-| 语音合成 | sherpa-onnx Kokoro（离线） |
-| 语音检测 | sherpa-onnx silero-vad（离线） |
-| 长期记忆 | SQLite + FTS5 + sqlite-vec |
-| 知识图谱 | 时序三元组 (valid_from/to) |
-| 安全防护 | Prompt 注入检测 + 命令守卫 |
+| 0 – 4.5 | 架构 → 核心 → 语音 → 智能 → 收尾 | ✅ 已完成 |
+| 5 | MVP 发布（真实语音引擎 + 语音输入 UI） | ✅ |
+| 未来 | 全息投影 · 数据采集 · 更多通信平台 | ⏳ |
 
 ## 文档
 
-- [用户指南](docs/USAGE_GUIDE.md)
-- [Discord 配置](docs/DISCORD_SETUP.md)
-- [开发约定](CLAUDE.md)
-- [技术方案](PROPOSAL.md)
-- [贡献指南](CONTRIBUTING.md)
+| 文档 | 说明 |
+|------|------|
+| [用户指南](docs/USAGE_GUIDE.md) | 安装、配置、使用 |
+| [Discord 配置](docs/DISCORD_SETUP.md) | 手机伴侣通知 |
+| [开发约定](CLAUDE.md) | 多 Agent 开发策略 |
+| [技术方案](PROPOSAL.md) | 完整架构设计 |
+| [贡献指南](CONTRIBUTING.md) | 如何参与 |
 
 ## License
 
