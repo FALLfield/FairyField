@@ -169,16 +169,23 @@ impl LlmConfig {
 /// 语音管道配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceConfig {
+    #[serde(default)]
     pub asr_model: String,
+    #[serde(default)]
     pub tts_model: String,
+    #[serde(default)]
     pub vad_model: String,
+    #[serde(default = "default_sample_rate")]
     pub sample_rate: u32,
+    #[serde(default)]
     pub language: String,
     #[serde(default = "default_tts_speaker_id")]
     pub tts_speaker_id: i32,
     #[serde(default = "default_tts_speed")]
     pub tts_speed: f32,
 }
+
+fn default_sample_rate() -> u32 { 16000 }
 
 fn default_tts_speaker_id() -> i32 { 0 }
 fn default_tts_speed() -> f32 { 1.0 }
@@ -188,50 +195,81 @@ fn default_temperature() -> f32 { 0.7 }
 /// 角色配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CharacterConfig {
+    #[serde(default)]
     pub model_path: String,
+    #[serde(default)]
     pub default_expression: String,
 }
 
 /// 窗口配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowConfig {
+    #[serde(default = "default_window_width")]
     pub width: f64,
+    #[serde(default = "default_window_height")]
     pub height: f64,
+    #[serde(default = "default_true")]
     pub transparent: bool,
+    #[serde(default = "default_true")]
     pub always_on_top: bool,
+    #[serde(default)]
     pub decorations: bool,
+    #[serde(default = "default_true")]
     pub click_through: bool,
 }
+
+fn default_window_width() -> f64 { 400.0 }
+fn default_window_height() -> f64 { 700.0 }
+fn default_true() -> bool { true }
 
 /// 记忆系统配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryConfig {
+    #[serde(default)]
     pub db_path: String,
+    #[serde(default = "default_embedding_dim")]
     pub embedding_dim: usize,
+    #[serde(default = "default_wakeup_tokens")]
     pub wakeup_max_tokens: usize,
+    #[serde(default = "default_dedup_threshold")]
     pub dedup_threshold: f32,
 }
+
+fn default_embedding_dim() -> usize { 384 }
+fn default_wakeup_tokens() -> usize { 600 }
+fn default_dedup_threshold() -> f32 { 0.9 }
 
 /// 通信网关配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayConfig {
+    #[serde(default)]
     pub telegram_enabled: bool,
     /// Telegram Bot Token：序列化时跳过（不写入文件）
     #[serde(skip_serializing, default)]
     pub telegram_token: String,
+    #[serde(default)]
     pub cron_enabled: bool,
 }
 
 /// UI 配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiConfig {
+    #[serde(default = "default_chat_bubble_width")]
     pub chat_bubble_max_width: u32,
+    #[serde(default = "default_font_size")]
     pub message_font_size: u32,
+    #[serde(default)]
     pub show_debug_panel: bool,
+    #[serde(default)]
     pub show_fps: bool,
+    #[serde(default = "default_true")]
     pub show_chat: bool,
+    #[serde(default = "default_true")]
     pub window_always_on_top: bool,
 }
+
+fn default_chat_bubble_width() -> u32 { 320 }
+fn default_font_size() -> u32 { 14 }
 
 /// 返回配置目录路径（`~/.fairyfield/`）
 pub fn config_dir() -> PathBuf {
@@ -526,6 +564,42 @@ mod tests {
         // active_preset 应回退到旧字段
         let preset = parsed.llm.active_preset();
         assert_eq!(preset.provider_type, "glm");
+    }
+
+    #[test]
+    fn minimal_new_format_config() {
+        // 用户最简配置（仅 providers + active_provider，无旧字段）
+        let json = r#"{
+            "llm": {
+                "active_provider": "DeepSeek V4 Flash",
+                "providers": [
+                    {
+                        "name": "DeepSeek V4 Flash",
+                        "provider_type": "openai",
+                        "api_endpoint": "https://api.deepseek.com/v1",
+                        "model": "deepseek-chat",
+                        "api_key": "sk-test"
+                    }
+                ],
+                "max_tokens": 2048,
+                "temperature": 0.7
+            },
+            "voice": {},
+            "character": {},
+            "window": {},
+            "memory": {},
+            "gateway": {},
+            "ui": {}
+        }"#;
+        let parsed: AppConfig = serde_json::from_str(json)
+            .expect("最简配置反序列化应成功（所有字段有 default）");
+        assert_eq!(parsed.llm.active_provider, "DeepSeek V4 Flash");
+        assert_eq!(parsed.llm.providers[0].api_key, "sk-test");
+        assert_eq!(parsed.window.width, 400.0);
+        assert_eq!(parsed.window.height, 700.0);
+        assert!(parsed.window.transparent);
+        assert!(parsed.ui.show_chat);
+        assert!(!parsed.ui.show_debug_panel);
     }
 
     #[test]
