@@ -361,7 +361,10 @@ fn create_provider_with_fallback(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let config = load_from_file().unwrap_or_else(|_| default_config());
+    let config = load_from_file().unwrap_or_else(|e| {
+        eprintln!("[FairyField] ⚠ 配置文件加载失败，使用默认配置: {e}");
+        default_config()
+    });
     let agent_config = agent::AgentConfig::default();
 
     // 创建共享记忆层（Arc 在 Agent 和 MemoryState 之间共享）
