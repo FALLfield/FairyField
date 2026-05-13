@@ -54,13 +54,18 @@ pub struct LlmConfig {
     #[serde(default = "default_providers")]
     pub providers: Vec<ProviderPreset>,
     // ---- 以下为向后兼容字段（旧配置文件仍可使用） ----
+    #[serde(default)]
     pub provider: String,
+    #[serde(default)]
     pub model: String,
     /// API 密钥：序列化时跳过（不写入文件），反序列化时用 default 填充
     #[serde(skip_serializing, default)]
     pub api_key: String,
+    #[serde(default)]
     pub api_endpoint: String,
+    #[serde(default = "default_max_tokens")]
     pub max_tokens: u32,
+    #[serde(default = "default_temperature")]
     pub temperature: f32,
 }
 
@@ -177,6 +182,8 @@ pub struct VoiceConfig {
 
 fn default_tts_speaker_id() -> i32 { 0 }
 fn default_tts_speed() -> f32 { 1.0 }
+fn default_max_tokens() -> u32 { 2048 }
+fn default_temperature() -> f32 { 0.7 }
 
 /// 角色配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -519,5 +526,47 @@ mod tests {
         // active_preset 应回退到旧字段
         let preset = parsed.llm.active_preset();
         assert_eq!(preset.provider_type, "glm");
+    }
+
+    #[test]
+    fn new_format_without_legacy_fields() {
+        // 新格式配置（只有 providers 数组，无 provider/model/api_endpoint 旧字段）
+        let new_json = r#"{
+            "llm": {
+                "active_provider": "DeepSeek V4 Flash",
+                "providers": [
+                    {
+                        "name": "DeepSeek V4 Flash",
+                        "provider_type": "openai",
+                        "api_endpoint": "https://api.deepseek.com/v1",
+                        "model": "deepseek-chat",
+                        "api_key": "sk-test"
+                    }
+                ],
+                "max_tokens": 2048,
+                "temperature": 0.7
+            },
+            "voice": { "asr_model": "paraformer", "tts_model": "kokoro", "vad_model": "silero-vad", "sample_rate": 16000, "language": "zh" },
+            "character": { "model_path": "models/default/default.vrm", "default_expression": "neutral" },
+            "window": { "width": 400, "height": 700, "transparent": true, "always_on_top": true, "decorations": false, "click_through": true },
+            "memory": { "db_path": "fairyfield.db", "embedding_dim": 384, "wakeup_max_tokens": 600, "dedup_threshold": 0.9 },
+            "gateway": { "telegram_enabled": false, "telegram_token": "", "cron_enabled": false },
+            "ui": { "chat_bubble_max_width": 320, "message_font_size": 14, "show_debug_panel": false, "show_fps": false, "show_chat": true, "window_always_on_top": true }
+        }"#;
+        let parsed: AppConfig = serde_json::from_str(new_json)
+            .expect("新格式配置反序列化失败（缺少 provider 等旧字段应被 default 填充）");
+        assert_eq!(parsed.llm.active_provider, "DeepSeek V4 Flash");
+        assert_eq!(parsed.llm.providers.len(), 1);
+        assert_eq!(parsed.llm.providers[0].name, "DeepSeek V4 Flash");
+        assert_eq!(parsed.llm.providers[0].api_key, "sk-test");
+        assert_eq!(parsed.llm.max_tokens, 2048);
+        assert_eq!(parsed.llm.temperature, 0.7);
+        // 旧字段应被 default 填充为空
+        assert!(parsed.llm.provider.is_empty());
+        assert!(parsed.llm.model.is_empty());
+        // active_preset 应从 providers 查找
+        let preset = parsed.llm.active_preset();
+        assert_eq!(preset.provider_type, "openai");
+        assert_eq!(preset.model, "deepseek-chat");
     }
 }
