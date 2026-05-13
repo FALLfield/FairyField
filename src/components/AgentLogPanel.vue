@@ -37,7 +37,7 @@ function clear(): void {
     <div v-if="showPanel" class="panel-body">
       <div class="header-row">
         <span class="log-count">{{ logs.length }} 条记录</span>
-        <button class="clear-btn" @click="clear" :disabled="logs.length === 0">
+        <button class="clear-btn" aria-label="清空日志" @click="clear" :disabled="logs.length === 0">
           清空
         </button>
       </div>

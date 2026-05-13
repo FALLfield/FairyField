@@ -113,6 +113,15 @@ function onKeydown(e: KeyboardEvent): void {
 
 @keyframes mic-glow { 0%, 100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.3); } 50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.55); } }
 
+@media (prefers-reduced-motion: reduce) {
+  .mic-btn.is-recording {
+    animation: none;
+  }
+  .pulse-dot {
+    animation: none;
+  }
+}
+
 .recording-indicator {
   flex: 1; display: flex; align-items: center; gap: 8px;
   padding: 7px 10px; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px;

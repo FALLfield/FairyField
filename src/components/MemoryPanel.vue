@@ -27,7 +27,7 @@ async function doWakeUp() {
     <div v-if="showPanel" class="panel-body">
       <!-- Wake-up -->
       <section class="section">
-        <button class="action-btn" @click="doWakeUp" :disabled="memory.loading.value">
+        <button class="action-btn" aria-label="唤醒记忆" @click="doWakeUp" :disabled="memory.loading.value">
           Wake Up
         </button>
         <div v-if="wakeUpCtx" class="wakeup-box">
@@ -45,9 +45,10 @@ async function doWakeUp() {
             v-model="searchQuery"
             placeholder="搜索记忆..."
             class="search-input"
+            aria-label="搜索记忆"
             @keyup.enter="doSearch"
           />
-          <button class="action-btn" @click="doSearch" :disabled="memory.loading.value">
+          <button class="action-btn" aria-label="搜索记忆" @click="doSearch" :disabled="memory.loading.value">
             搜索
           </button>
         </div>

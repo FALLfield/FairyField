@@ -231,4 +231,13 @@ const relativeTime = computed<string>(() => {
     opacity: 1;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
+  .speaking-dot {
+    animation: none;
+  }
+}
 </style>

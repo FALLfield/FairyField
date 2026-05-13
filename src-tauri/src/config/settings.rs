@@ -303,10 +303,14 @@ pub fn load_from_file() -> Result<AppConfig, String> {
         let cfg = default_config();
         // 尝试保存默认配置；目录不存在则创建
         if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
+            if let Err(e) = fs::create_dir_all(parent) {
+                eprintln!("[FairyField] 创建配置目录失败: {e}");
+            }
         }
         if let Ok(json) = serde_json::to_string_pretty(&cfg) {
-            let _ = fs::write(&path, json);
+            if let Err(e) = fs::write(&path, json) {
+                eprintln!("[FairyField] 写入默认配置文件失败: {e}");
+            }
         }
 
         // 环境变量覆盖 api_key
@@ -393,6 +397,11 @@ pub fn default_config() -> AppConfig {
             window_always_on_top: true,
         },
     }
+}
+
+/// 模型文件目录（`~/.fairyfield/models/`）
+pub fn models_dir() -> PathBuf {
+    dirs_home_dir().join(CONFIG_DIR_NAME).join("models")
 }
 
 /// 跨平台获取 HOME 目录

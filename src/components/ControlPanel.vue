@@ -39,10 +39,6 @@ async function loadProviders(): Promise<void> {
     activeProvider.value = active.name;
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : String(e);
-    // 仅在 Tauri 环境下显示错误（浏览器环境 invoke 不可用是正常的）
-    if ((window as any).__TAURI_INTERNALS__) {
-      console.warn('LLM 提供商加载失败:', loadError.value);
-    }
   }
 }
 
@@ -53,7 +49,7 @@ async function switchProvider(name: string): Promise<void> {
     await tauriCommands.llmSwitchProvider(name);
     activeProvider.value = name;
   } catch (e) {
-    console.error('切换提供商失败:', e);
+    if (import.meta.env.DEV) console.error('切换提供商失败:', e);
   } finally {
     switching.value = false;
   }

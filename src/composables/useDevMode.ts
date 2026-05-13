@@ -18,15 +18,20 @@ export function useDevMode() {
   // Detect triple-click on avatar
   let clickCount = 0;
   let clickTimer: ReturnType<typeof setTimeout> | null = null;
+  let clickResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   function onAvatarTripleClick(): void {
     clickCount++;
-    if (clickTimer) clearTimeout(clickTimer);
-    clickTimer = setTimeout(() => {
+    if (clickResetTimer) clearTimeout(clickResetTimer);
+    clickResetTimer = setTimeout(() => {
       clickCount = 0;
     }, 400);
     if (clickCount >= 3) {
       clickCount = 0;
+      if (clickResetTimer) {
+        clearTimeout(clickResetTimer);
+        clickResetTimer = null;
+      }
       toggle();
     }
   }
@@ -37,6 +42,14 @@ export function useDevMode() {
 
   onUnmounted(() => {
     window.removeEventListener('keydown', onKeyDown);
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+    }
+    if (clickResetTimer) {
+      clearTimeout(clickResetTimer);
+      clickResetTimer = null;
+    }
   });
 
   return {

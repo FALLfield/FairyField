@@ -196,14 +196,14 @@ pub fn apply_anthropic_cache(body: &mut serde_json::Value) -> bool {
     // 1. 将 system 字符串转为内容块数组并标记缓存
     if let Some(system_val) = body.get("system").cloned() {
         if let Some(text) = system_val.as_str() {
-            body.as_object_mut()
-                .unwrap()
-                .insert("system".into(), serde_json::json!([{
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("system".into(), serde_json::json!([{
                     "type": "text",
                     "text": text,
                     "cache_control": { "type": "ephemeral" }
                 }]));
-            applied = true;
+                applied = true;
+            }
         }
     }
 
@@ -221,15 +221,17 @@ pub fn apply_anthropic_cache(body: &mut serde_json::Value) -> bool {
             if let Some(msg) = messages.get_mut(idx) {
                 // 将字符串 content 转为内容块数组
                 if let Some(content) = msg.get("content").and_then(|v| v.as_str()).map(|s| s.to_string()) {
-                    msg.as_object_mut().unwrap().insert(
-                        "content".into(),
-                        serde_json::json!([{
-                            "type": "text",
-                            "text": content,
-                            "cache_control": { "type": "ephemeral" }
-                        }]),
-                    );
-                    applied = true;
+                    if let Some(msg_obj) = msg.as_object_mut() {
+                        msg_obj.insert(
+                            "content".into(),
+                            serde_json::json!([{
+                                "type": "text",
+                                "text": content,
+                                "cache_control": { "type": "ephemeral" }
+                            }]),
+                        );
+                        applied = true;
+                    }
                 }
             }
         }

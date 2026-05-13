@@ -83,7 +83,7 @@ async function toggleRecording(): Promise<void> {
         await sendWithTts(text);
       }
     } catch (e) {
-      console.error('ASR 失败:', e);
+      if (import.meta.env.DEV) console.error('ASR 失败:', e);
     } finally {
       isRecording.value = false;
       recordingText.value = '';

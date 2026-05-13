@@ -47,7 +47,13 @@ async function runTool(name: string) {
 
     <div v-if="showPanel" class="panel-body">
       <div v-for="t in toolList" :key="t.name" class="tool-item">
-        <div class="tool-header" @click="toggle(t.name)">
+        <div
+            class="tool-header"
+            role="button"
+            :aria-label="`展开/折叠工具 ${t.name}`"
+            :aria-expanded="expanded === t.name"
+            @click="toggle(t.name)"
+          >
           <span class="tool-name">{{ t.name }}</span>
           <span class="tool-desc">{{ t.description }}</span>
           <span class="arrow">{{ expanded === t.name ? '▲' : '▼' }}</span>
@@ -59,9 +65,15 @@ async function runTool(name: string) {
             class="json-input"
             rows="3"
             placeholder='{"key": "value"}'
+            aria-label="工具输入参数"
           ></textarea>
           <div class="btn-row">
-            <button class="run-btn" @click="runTool(t.name)" :disabled="tools.loading.value">
+            <button
+              class="run-btn"
+              :aria-label="`执行工具 ${t.name}`"
+              @click="runTool(t.name)"
+              :disabled="tools.loading.value"
+            >
               执行
             </button>
           </div>

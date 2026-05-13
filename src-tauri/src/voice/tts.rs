@@ -217,8 +217,7 @@ pub mod kokoro {
 
     impl Default for KokoroConfig {
         fn default() -> Self {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-            let base = PathBuf::from(home).join(".fairyfield/models/kokoro");
+            let base = crate::config::settings::models_dir().join("kokoro");
             Self {
                 model_path: base.join("model.onnx"),
                 voices_path: base.join("voices.bin"),
@@ -340,8 +339,7 @@ fn dirs_next_or_home(config: &crate::config::settings::VoiceConfig) -> std::path
             return parent.to_path_buf();
         }
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    std::path::PathBuf::from(home).join(".fairyfield/models")
+    crate::config::settings::models_dir()
 }
 
 /// TTS 管理器 — 合成并播放音频

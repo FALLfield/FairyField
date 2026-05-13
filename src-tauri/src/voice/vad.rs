@@ -93,8 +93,7 @@ fn vad_model_path(config: &crate::config::settings::VoiceConfig) -> std::path::P
     if !config.vad_model.is_empty() && std::path::Path::new(&config.vad_model).exists() {
         return std::path::PathBuf::from(&config.vad_model);
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    std::path::PathBuf::from(home).join(".fairyfield/models/vad/silero-vad.onnx")
+    crate::config::settings::models_dir().join("vad/silero-vad.onnx")
 }
 
 /// sherpa-onnx silero-vad 引擎

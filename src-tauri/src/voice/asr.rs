@@ -88,8 +88,7 @@ fn asr_model_dir(config: &crate::config::settings::VoiceConfig) -> std::path::Pa
     if !config.asr_model.is_empty() && std::path::Path::new(&config.asr_model).exists() {
         return std::path::PathBuf::from(&config.asr_model);
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    std::path::PathBuf::from(home).join(".fairyfield/models/paraformer")
+    crate::config::settings::models_dir().join("paraformer")
 }
 
 /// sherpa-onnx Paraformer ASR 引擎
