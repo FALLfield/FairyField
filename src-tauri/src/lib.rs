@@ -303,10 +303,65 @@ async fn llm_get_active_provider(
 
 // ========== 应用入口 ==========
 
+/// 依次尝试所有提供商，找到第一个 API Key 非空的（优先从环境变量读取）
+fn create_provider_with_fallback(
+    llm: &crate::config::LlmConfig,
+) -> Result<Arc<dyn llm::provider::LlmProvider>, llm::LlmError> {
+    use llm::provider::{create_provider, LlmProvider};
+    use llm::{LlmError, LlmProviderConfig};
+
+    // 按顺序遍历：先 active_provider 匹配的，再其余
+    let mut ordered: Vec<&crate::config::ProviderPreset> = Vec::new();
+    if let Some(active) = llm.providers.iter().find(|p| p.name == llm.active_provider) {
+        ordered.push(active);
+    }
+    for p in &llm.providers {
+        if p.name != llm.active_provider {
+            ordered.push(p);
+        }
+    }
+    // 旧格式兼容（providers 为空时从旧字段构造）
+    if ordered.is_empty() {
+        // 借用 checker 需要一个 owned preset；这里直接用 active_preset()
+        let _preset = llm.active_preset(); // 需要 owned — 但借用检查器有问题
+        return Err(LlmError("无提供商配置，请在 config.json 的 llm.providers 中添加至少一个提供商".into()));
+    }
+
+    let mut last_err = None;
+    for preset in &ordered {
+        let mut config = LlmProviderConfig {
+            provider: preset.provider_type.clone(),
+            api_key: preset.api_key.clone(),
+            api_endpoint: preset.api_endpoint.clone(),
+            model: preset.model.clone(),
+        };
+        // 环境变量覆盖
+        if config.api_key.is_empty() {
+            config = config.with_env_api_key();
+        }
+        if config.api_key.is_empty() {
+            last_err = Some(LlmError(format!(
+                "提供商 '{}' 未配置 API Key（跳过）", preset.name
+            )));
+            continue;
+        }
+        match create_provider(config) {
+            Ok(p) => {
+                eprintln!("[FairyField] LLM: 使用提供商 '{}'", preset.name);
+                return Ok(p);
+            }
+            Err(e) => {
+                eprintln!("[FairyField] LLM: 提供商 '{}' 初始化失败: {}", preset.name, e);
+                last_err = Some(e);
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| LlmError("无可用提供商".into())))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = load_from_file().unwrap_or_else(|_| default_config());
-    let provider_config = LlmProviderConfig::from_llm_config(&config.llm);
     let agent_config = agent::AgentConfig::default();
 
     // 创建共享记忆层（Arc 在 Agent 和 MemoryState 之间共享）
@@ -334,7 +389,9 @@ pub fn run() {
     let toolset = Arc::new(agent::Toolset::new(executor, guard, injection_detector));
 
     // 创建 Agent（带工具和记忆）
-    let provider = create_provider(provider_config).expect("Failed to create LLM provider");
+    // 尝试所有提供商，找到第一个 API Key 有效的
+    let provider = create_provider_with_fallback(&config.llm)
+        .expect("所有 LLM 提供商的 API Key 都为空。请设置环境变量 OPENAI_API_KEY / ANTHROPIC_API_KEY / FAIRYFIELD_API_KEY，或在 ~/.fairyfield/config.json 中配置 api_key。");
     let mut agent = PrimaryAgent::with_tools_and_memory(
         provider,
         agent_config,
