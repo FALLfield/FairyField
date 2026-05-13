@@ -390,8 +390,14 @@ pub fn run() {
 
     // 创建 Agent（带工具和记忆）
     // 尝试所有提供商，找到第一个 API Key 有效的
-    let provider = create_provider_with_fallback(&config.llm)
-        .expect("所有 LLM 提供商的 API Key 都为空。请设置环境变量 OPENAI_API_KEY / ANTHROPIC_API_KEY / FAIRYFIELD_API_KEY，或在 ~/.fairyfield/config.json 中配置 api_key。");
+    let provider = match create_provider_with_fallback(&config.llm) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[FairyField] ⚠ 所有 LLM 提供商初始化失败: {}", e);
+            eprintln!("[FairyField] 请在 ~/.fairyfield/config.json 中配置至少一个提供商的 api_key");
+            Arc::new(llm::provider::MockProvider::new("⚠️ LLM 未配置。请在 ~/.fairyfield/config.json 中设置 api_key。"))
+        }
+    };
     let mut agent = PrimaryAgent::with_tools_and_memory(
         provider,
         agent_config,
