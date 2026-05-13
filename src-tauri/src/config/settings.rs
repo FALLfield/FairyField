@@ -68,6 +68,13 @@ pub struct LlmConfig {
 fn default_providers() -> Vec<ProviderPreset> {
     vec![
         ProviderPreset {
+            name: "DeepSeek V4 Flash".to_string(),
+            provider_type: "openai".to_string(),
+            api_endpoint: "https://api.deepseek.com/v1".to_string(),
+            model: "deepseek-chat".to_string(),
+            api_key: String::new(),
+        },
+        ProviderPreset {
             name: "OpenAI GPT-4o".to_string(),
             provider_type: "openai".to_string(),
             api_endpoint: "https://api.openai.com/v1".to_string(),
@@ -291,7 +298,7 @@ pub fn save_to_file(config: &AppConfig) -> Result<(), String> {
 pub fn default_config() -> AppConfig {
     AppConfig {
         llm: LlmConfig {
-            active_provider: "OpenAI GPT-4o".to_string(),
+            active_provider: "DeepSeek V4 Flash".to_string(),
             providers: default_providers(),
             provider: "openai".to_string(),
             model: "gpt-4o".to_string(),
@@ -367,11 +374,13 @@ mod tests {
         assert_eq!(config.llm.provider, "openai");
         assert_eq!(config.llm.model, "gpt-4o");
         assert!(config.llm.api_key.is_empty());
-        assert_eq!(config.llm.active_provider, "OpenAI GPT-4o");
-        assert_eq!(config.llm.providers.len(), 3);
+        assert_eq!(config.llm.active_provider, "DeepSeek V4 Flash");
+        assert_eq!(config.llm.providers.len(), 4);
         assert_eq!(config.llm.providers[0].provider_type, "openai");
-        assert_eq!(config.llm.providers[1].provider_type, "claude");
-        assert_eq!(config.llm.providers[2].provider_type, "glm");
+        assert_eq!(config.llm.providers[0].model, "deepseek-chat");
+        assert_eq!(config.llm.providers[1].provider_type, "openai");
+        assert_eq!(config.llm.providers[2].provider_type, "claude");
+        assert_eq!(config.llm.providers[3].provider_type, "glm");
         assert_eq!(config.voice.sample_rate, 16000);
         assert_eq!(config.character.default_expression, "neutral");
         assert!(config.window.transparent);
@@ -446,7 +455,7 @@ mod tests {
         let config = default_config();
         let preset = config.llm.active_preset();
         assert_eq!(preset.provider_type, "openai");
-        assert_eq!(preset.model, "gpt-4o");
+        assert_eq!(preset.model, "deepseek-chat");
     }
 
     #[test]
@@ -478,7 +487,8 @@ mod tests {
     fn provider_names_returns_all() {
         let config = default_config();
         let names = config.llm.provider_names();
-        assert_eq!(names.len(), 3);
+        assert_eq!(names.len(), 4);
+        assert!(names.contains(&"DeepSeek V4 Flash".to_string()));
         assert!(names.contains(&"OpenAI GPT-4o".to_string()));
         assert!(names.contains(&"Claude Sonnet".to_string()));
         assert!(names.contains(&"智谱 GLM-4".to_string()));

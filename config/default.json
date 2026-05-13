@@ -1,31 +1,73 @@
 {
+  "_comment": "FairyField 默认配置模板。API Key 请通过环境变量设置，不要写在这里。",
   "llm": {
-    "provider": "openai",
-    "api_endpoint": "https://api.openai.com/v1",
-    "model": "gpt-4o",
-    "system_prompt": "你是 FairyField 的 AI 伴侣角色，性格活泼可爱。",
-    "max_context_tokens": 4096,
-    "temperature": 0.8
+    "active_provider": "DeepSeek V4 Flash",
+    "providers": [
+      {
+        "name": "DeepSeek V4 Flash",
+        "provider_type": "openai",
+        "api_endpoint": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
+        "api_key": ""
+      },
+      {
+        "name": "OpenAI GPT-4o",
+        "provider_type": "openai",
+        "api_endpoint": "https://api.openai.com/v1",
+        "model": "gpt-4o",
+        "api_key": ""
+      },
+      {
+        "name": "Claude Sonnet",
+        "provider_type": "claude",
+        "api_endpoint": "https://api.anthropic.com",
+        "model": "claude-sonnet-4-20250514",
+        "api_key": ""
+      },
+      {
+        "name": "智谱 GLM-4",
+        "provider_type": "glm",
+        "api_endpoint": "https://open.bigmodel.cn/api/paas/v4",
+        "model": "glm-4",
+        "api_key": ""
+      }
+    ],
+    "max_tokens": 4096,
+    "temperature": 0.7
   },
   "voice": {
-    "asr_enabled": false,
-    "tts_enabled": false,
-    "vad_enabled": false,
-    "tts_speaker": "default",
-    "asr_model_path": "",
-    "tts_model_path": "",
-    "vad_model_path": ""
+    "asr_model": "paraformer",
+    "tts_model": "kokoro",
+    "vad_model": "silero-vad",
+    "sample_rate": 16000,
+    "language": "zh"
   },
   "character": {
-    "model_path": "models/default/2031903848872972007.glb",
-    "default_expression": "neutral",
-    "name": "Fairy"
+    "model_path": "models/default/default.vrm",
+    "default_expression": "neutral"
   },
   "window": {
-    "width": 512,
-    "height": 768,
+    "width": 400,
+    "height": 700,
     "transparent": true,
     "always_on_top": true,
+    "decorations": false,
     "click_through": true
+  },
+  "memory": {
+    "db_path": "fairyfield.db",
+    "embedding_dim": 384,
+    "wakeup_max_tokens": 600,
+    "dedup_threshold": 0.9
+  },
+  "gateway": {
+    "telegram_enabled": false,
+    "cron_enabled": false
+  },
+  "ui": {
+    "chat_bubble_max_width": 320,
+    "message_font_size": 14,
+    "show_control_panel": false,
+    "accent_color": "#6366f1"
   }
 }
