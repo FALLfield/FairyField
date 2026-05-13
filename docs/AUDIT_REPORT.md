@@ -350,3 +350,110 @@ graphify hook install
 ---
 
 > 审计完成时间: 2026-05-13 | 下次审计: 修复 P0 项目后
+
+---
+
+## 十一、深入审计补充（Agent 自动化扫描）
+
+### Rust 后端 — 关键新发现
+
+#### 🔴 CRITICAL: Shell 命令注入（换行绕过白名单）
+
+`tools/shell.rs:32-38` — 命令白名单通过 `split_whitespace().next()` 提取第一个 token 验证，但 `sh -c` 会将换行符解释为命令分隔符：
+
+```
+攻击: "echo hello\nrm -rf /" → extract_cmd_name 返回 "echo" → 白名单通过 → sh -c 执行两行
+```
+
+**修复**: 拒绝含换行符的输入，或改用 `Command::new(cmd).args(...)` 替代 `sh -c`。
+
+#### 🔴 CRITICAL: 异步上下文中阻塞 sleep
+
+`tools/shell.rs:119-157` — `wait_with_timeout()` 使用 `std::thread::sleep()` 在 tight loop 中轮询。该函数在 `Box::pin(async move { ... })` 中调用，block 住 tokio worker 线程最长 10 秒。
+
+**修复**: 改用 `tokio::process::Command` + `tokio::time::sleep`。
+
+#### 🟠 HIGH: LLM API 响应 JSON unwrap 崩溃
+
+`llm/caching.rs` (6处) 和 `llm/provider.rs` (5处) — 如果 LLM API 返回格式变化，`body.get("system").unwrap().as_array().unwrap()` 直接崩溃进程。
+
+**修复**: 用模式匹配替代 unwrap，返回 `LlmError`。
+
+#### 🟠 HIGH: 启动期 config 保存静默失败
+
+`config/settings.rs:306,309` — `let _ = fs::create_dir_all(parent); let _ = fs::write(&path, json);` — 磁盘满或只读时配置保存失败无提示。
+
+**修复**: 让 `save_to_file()` 返回 Result。
+
+#### 🟠 HIGH: VoicePipeline 全局锁阻塞所有语音操作
+
+`lib.rs:84,105,119` — TTS 合成时持有 pipeline 全局锁，阻塞 ASR/VAD 状态查询。
+
+**修复**: 拆分 TTS/ASR/VAD 各自的锁。
+
+#### 🟠 HIGH: API Key 安全 — 空字段检查不充分
+
+当 api_key 非空字符串时，`serde::Serialize` 可能将其写入磁盘。需用 `#[serde(skip_serializing)]` 而非 `skip_serializing_if`。
+
+### 前端 — 关键新发现
+
+#### 🔴 CRITICAL: ChatPanel.vue 612 行
+
+CSS 327 行，模板 166 行。应拆分为 `ChatInput.vue` + `ChatHistory.vue` + `CollapsedBubble.vue`。
+
+#### 🔴 CRITICAL: 无 Vue 错误边界
+
+整个 App 无 `errorCaptured` 钩子。emotion-engine 抛出异常会导致整个组件树卸载。
+
+#### 🟠 HIGH: useAgent.send() 竞态条件
+
+快速连续调用 `send()` 无防重入保护，`messages` 状态可能被并发写坏。
+
+**修复**: 添加 `if (isStreaming.value) return;` 守卫。
+
+#### 🟠 HIGH: 4 处 Tauri event listener 静默失败
+
+`CharacterCanvas.vue:96-116` — emotion/audio/TTS 事件监听器注册失败被 `.catch(() => null)` 吞掉。
+
+#### 🟠 HIGH: 5 处 setTimeout/setInterval 无清理
+
+`useDevMode.ts:clickTimer`, `CharacterCanvas.vue:setTimeout`, `HitTestModule.ts:setTimeout` — 组件卸载时定时器未清除。
+
+#### 🟠 HIGH: 窗口 resize 无 debounce
+
+`VRMRenderer.ts:93` — `window.addEventListener('resize', ...)` 在拖拽窗口时 60fps 触发，每次都重算 camera/renderer。
+
+#### 🟠 HIGH: ChatPanel deep watch 性能问题
+
+`watch(() => props.messages, ..., { deep: true })` — 100+ 条消息时每次新增都深度比较整个数组。
+
+**修复**: 只 watch `props.messages.length`。
+
+#### 🟠 HIGH: 无 `prefers-reduced-motion` 支持
+
+全局 0 处。动效敏感的残障用户无法关闭动画。
+
+#### 🟠 HIGH: 3 个调试面板无 aria-label
+
+MemoryPanel / ToolsPanel / AgentLogPanel 的按钮/输入框全部缺少 ARIA 标签。
+
+---
+
+## 十二、综合风险矩阵
+
+| 风险 | 资产 | 可能性 | 影响 | 级别 |
+|------|------|--------|------|------|
+| Shell 命令注入 | 用户系统 | 低（需用户明确执行工具） | 极高 | 🔴 CRITICAL |
+| 异步阻塞 sleep | Agent 响应 | 中（任意 shell 工具调用） | 高（UI 冻结 10s） | 🔴 CRITICAL |
+| LLM 响应 unwrap 崩溃 | 对话功能 | 中（API 变更） | 高（进程崩溃） | 🟠 HIGH |
+| Config 静默丢失 | 用户配置 | 低（磁盘满） | 中 | 🟠 HIGH |
+| VoicePipeline 锁竞争 | 语音功能 | 高（TTS 时查询 VAD） | 中 | 🟠 HIGH |
+| useAgent 竞态条件 | 聊天 UI | 低（用户快速双击） | 中（状态错乱） | 🟠 HIGH |
+| 未经清理的定时器 | 内存 | 低 | 低（内存泄漏累积） | 🟡 MEDIUM |
+| 缺少 ARIA 标签 | 可访问性 | 确定 | 中 | 🟡 MEDIUM |
+| 无 reduced-motion | 可访问性 | 确定 | 低 | 🟡 MEDIUM |
+| Graphify 过期 | 开发效率 | 确定 | 低 | ⚪ LOW |
+
+---
+
+> 完整审计报告（持续更新）。上次更新: 2026-05-13 23:00
