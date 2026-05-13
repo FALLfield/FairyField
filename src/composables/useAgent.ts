@@ -63,6 +63,8 @@ export function useAgent() {
 
   /** 发送消息并接收流式回复 */
   async function send(message: string): Promise<void> {
+    // 防止竞态：正在流式回复时拒绝新的发送
+    if (isStreaming.value) return;
     error.value = null;
 
     const userMessage: AgentMessage = {

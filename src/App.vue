@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onErrorCaptured } from 'vue';
 import CharacterCanvas from './components/CharacterCanvas.vue';
 import ChatPanel from './components/ChatPanel.vue';
 import ControlPanel from './components/ControlPanel.vue';
@@ -13,6 +13,15 @@ import { useDevMode } from './composables/useDevMode';
 import { useAgentStatus } from './composables/useAgentStatus';
 
 const characterCanvasRef = ref<InstanceType<typeof CharacterCanvas> | null>(null);
+const appError = ref<string | null>(null);
+
+// Vue 错误边界 — 防止单个组件异常导致整个应用卸载
+onErrorCaptured((err: Error, _instance, info: string) => {
+  console.error('[FairyField] 组件错误:', info, err.message);
+  appError.value = `发生了意外错误: ${err.message}`;
+  setTimeout(() => { appError.value = null; }, 5000);
+  return false; // 阻止错误继续传播
+});
 
 const fps = ref(0);
 const modelLoaded = ref(false);
@@ -99,6 +108,11 @@ function onFps(value: number): void {
 
 <template>
   <main class="app-root">
+    <!-- 全局错误边界提示 -->
+    <div v-if="appError" class="status-overlay status-error">
+      <p>{{ appError }}</p>
+    </div>
+
     <!-- 加载/错误提示 -->
     <div v-if="errorMessage" class="status-overlay status-error">
       <p>{{ errorMessage }}</p>
