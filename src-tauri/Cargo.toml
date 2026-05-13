@@ -24,6 +24,8 @@ tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "stream", "multipart"] }
 futures-util = "0.3"
 thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 regex-lite = "0.1"
 
 # 持久化存储（Phase 2 启用）

@@ -10,10 +10,16 @@ use std::path::PathBuf;
 const CONFIG_DIR_NAME: &str = ".fairyfield";
 /// 配置文件名称
 const CONFIG_FILE_NAME: &str = "config.json";
+const CURRENT_CONFIG_VERSION: u32 = 1;
+
+fn default_config_version() -> u32 { CURRENT_CONFIG_VERSION }
 
 /// 应用全局配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    /// 配置格式版本（用于未来迁移）
+    #[serde(default = "default_config_version")]
+    pub version: u32,
     pub llm: LlmConfig,
     pub voice: VoiceConfig,
     pub character: CharacterConfig,
@@ -298,18 +304,26 @@ pub fn load_from_file() -> Result<AppConfig, String> {
             cfg.llm.api_key = key;
         }
 
+        // 版本兼容性检查
+        if cfg.version < CURRENT_CONFIG_VERSION {
+            tracing::info!(
+                "配置文件版本过旧 (v{} → v{})，将自动升级",
+                cfg.version, CURRENT_CONFIG_VERSION
+            );
+            cfg.version = CURRENT_CONFIG_VERSION;
+        }
         cfg
     } else {
         let cfg = default_config();
         // 尝试保存默认配置；目录不存在则创建
         if let Some(parent) = path.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
-                eprintln!("[FairyField] 创建配置目录失败: {e}");
+                tracing::error!("创建配置目录失败: {e}");
             }
         }
         if let Ok(json) = serde_json::to_string_pretty(&cfg) {
             if let Err(e) = fs::write(&path, json) {
-                eprintln!("[FairyField] 写入默认配置文件失败: {e}");
+                tracing::error!("写入默认配置文件失败: {e}");
             }
         }
 
@@ -346,6 +360,7 @@ pub fn save_to_file(config: &AppConfig) -> Result<(), String> {
 /// 返回默认应用配置
 pub fn default_config() -> AppConfig {
     AppConfig {
+        version: CURRENT_CONFIG_VERSION,
         llm: LlmConfig {
             active_provider: "DeepSeek V4 Flash".to_string(),
             providers: default_providers(),

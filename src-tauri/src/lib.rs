@@ -347,11 +347,11 @@ fn create_provider_with_fallback(
         }
         match create_provider(config) {
             Ok(p) => {
-                eprintln!("[FairyField] LLM: 使用提供商 '{}'", preset.name);
+                tracing::info!("LLM: 使用提供商 '{}'", preset.name);
                 return Ok(p);
             }
             Err(e) => {
-                eprintln!("[FairyField] LLM: 提供商 '{}' 初始化失败: {}", preset.name, e);
+                tracing::warn!("LLM: 提供商 '{}' 初始化失败: {}", preset.name, e);
                 last_err = Some(e);
             }
         }
@@ -361,8 +361,16 @@ fn create_provider_with_fallback(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 初始化结构化日志
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
     let config = load_from_file().unwrap_or_else(|e| {
-        eprintln!("[FairyField] ⚠ 配置文件加载失败，使用默认配置: {e}");
+        tracing::warn!("配置文件加载失败，使用默认配置: {e}");
         default_config()
     });
     let agent_config = agent::AgentConfig::default();
@@ -396,8 +404,8 @@ pub fn run() {
     let provider = match create_provider_with_fallback(&config.llm) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("[FairyField] ⚠ 所有 LLM 提供商初始化失败: {}", e);
-            eprintln!("[FairyField] 请在 ~/.fairyfield/config.json 中配置至少一个提供商的 api_key");
+            tracing::error!("所有 LLM 提供商初始化失败: {}", e);
+            tracing::error!("请在 ~/.fairyfield/config.json 中配置至少一个提供商的 api_key");
             Arc::new(llm::provider::MockProvider::new("⚠️ LLM 未配置。请在 ~/.fairyfield/config.json 中设置 api_key。"))
         }
     };
