@@ -2,7 +2,7 @@
 
 > **有灵魂的桌面 AI 伴侣** — 她悬浮在你的桌面上，会笑、会哭、会生气。
 > 记得你昨天的烦恼，会用真实的声音跟你聊天。
-> 她不是 AI 工具，她是你的 Natasha。
+> 她不是 AI 工具，她是你的 Fairy。
 
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-1.85+-orange?logo=rust" alt="Rust">

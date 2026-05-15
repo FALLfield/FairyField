@@ -61,6 +61,9 @@ export function useAgent() {
     }
   }
 
+  // 流式超时保护：120s 后强制关闭 loading 状态
+  let streamTimeout: ReturnType<typeof setTimeout> | null = null;
+
   /** 发送消息并接收流式回复 */
   async function send(message: string): Promise<void> {
     // 防止竞态：正在流式回复时拒绝新的发送
@@ -81,6 +84,14 @@ export function useAgent() {
       currentReply.value = '';
       emotionEngine.setEmotion('thinking');
       fairyEmotion.value = 'thinking';
+
+      // 安全超时：120s 后强制关闭 loading 状态，防止 UI 卡在"思考中..."
+      streamTimeout = setTimeout(() => {
+        if (isStreaming.value) {
+          isStreaming.value = false;
+          currentReply.value = '';
+        }
+      }, 120_000);
 
       let streamedContent = '';
 
@@ -125,6 +136,7 @@ export function useAgent() {
       emotionEngine.reset();
       fairyEmotion.value = 'neutral';
     } finally {
+      if (streamTimeout) clearTimeout(streamTimeout);
       isStreaming.value = false;
       currentReply.value = '';
     }
@@ -132,6 +144,7 @@ export function useAgent() {
 
   /** 中断当前流式回复 */
   function abort(): void {
+    if (streamTimeout) clearTimeout(streamTimeout);
     isStreaming.value = false;
     currentReply.value = '';
   }

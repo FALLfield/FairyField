@@ -37,7 +37,7 @@ function onKeydown(e: KeyboardEvent): void {
       v-else
       :value="inputText"
       class="message-input"
-      placeholder="跟 Natasha 说话..."
+      placeholder="跟 Fairy 说话..."
       rows="1"
       :disabled="isStreaming"
       @input="onInput"

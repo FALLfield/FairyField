@@ -32,7 +32,7 @@ const collapsedContent = computed(() => {
   if (props.isStreaming && props.currentReply) return { type: 'streaming' as const, text: props.currentReply };
   if (props.isStreaming) return { type: 'loading' as const, text: '' };
   if (latestAiMessage.value) return { type: 'message' as const, text: latestAiMessage.value.content, emotion: latestAiMessage.value.emotion ?? 'neutral' as Emotion, timestamp: latestAiMessage.value.timestamp };
-  return { type: 'welcome' as const, text: '你好呀，我是 Natasha (◕‿◕)' };
+  return { type: 'welcome' as const, text: '你好呀，我是 Fairy (◕‿◕)' };
 });
 
 function getMessageEmotion(msg: AgentMessage): Emotion {
@@ -44,7 +44,7 @@ function getMessageEmotion(msg: AgentMessage): Emotion {
   <!-- 展开状态 -->
   <div v-if="isExpanded" class="history-section">
     <div class="history-list">
-      <ChatBubble v-if="messages.length === 0" message="你好呀，我是 Natasha (◕‿◕) 有什么想聊的吗？" :is-user="false" emotion="happy" />
+      <ChatBubble v-if="messages.length === 0" message="你好呀，我是 Fairy (◕‿◕) 有什么想聊的吗？" :is-user="false" emotion="happy" />
       <ChatBubble v-for="msg in messages" :key="msg.id" :message="msg.content" :is-user="msg.role === 'user'" :emotion="getMessageEmotion(msg)" :timestamp="msg.timestamp" />
       <ChatBubble v-if="isStreaming && !currentReply" message="" :is-user="false" :is-loading="true" />
       <ChatBubble v-if="isStreaming && currentReply" :message="currentReply" :is-user="false" :emotion="currentEmotion" />

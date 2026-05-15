@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Vision
 
-FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面上——一个会笑、会哭、会生气的 3D 动漫角色。她记得你昨天的烦恼，会在你低落时安静陪伴，会在你开心时手舞足蹈。她通过语音跟你聊天，帮你执行任务，连接你的手机随时给你发消息。**她不是 AI 工具，她是你的 Natasha。**
+FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面上——一个会笑、会哭、会生气的 3D 动漫角色。她记得你昨天的烦恼，会在你低落时安静陪伴，会在你开心时手舞足蹈。她通过语音跟你聊天，帮你执行任务，连接你的手机随时给你发消息。**她不是 AI 工具，她是你的 Fairy。**
 
 核心理念融合了 Hermes Agent 的自主成长、安全体系、智能工具系统，以及 FairyField 独有的情感陪伴和全息渲染。
 
