@@ -74,7 +74,8 @@ impl SkillManager {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     /// 查看技能完整内容
@@ -85,18 +86,20 @@ impl SkillManager {
                 "SELECT name, description, version, category, reference, content FROM skills WHERE name = ?1",
             )
             .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query_map(params![name], |row| {
-            Ok(Skill {
-                meta: SkillMeta {
-                    name: row.get(0)?,
-                    description: row.get(1)?,
-                    version: row.get(2)?,
-                    category: row.get(3)?,
-                    reference: row.get(4)?,
-                },
-                content: row.get(5)?,
+        let mut rows = stmt
+            .query_map(params![name], |row| {
+                Ok(Skill {
+                    meta: SkillMeta {
+                        name: row.get(0)?,
+                        description: row.get(1)?,
+                        version: row.get(2)?,
+                        category: row.get(3)?,
+                        reference: row.get(4)?,
+                    },
+                    content: row.get(5)?,
+                })
             })
-        }).map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?;
         match rows.next() {
             Some(row) => Ok(Some(row.map_err(|e| e.to_string())?)),
             None => Ok(None),
@@ -122,10 +125,13 @@ impl SkillManager {
     /// 更新技能内容
     pub fn update_skill(&self, name: &str, content: &str) -> Result<(), String> {
         let ts = now_millis();
-        let rows = self.conn.execute(
-            "UPDATE skills SET content = ?1, updated_at = ?2 WHERE name = ?3",
-            params![content, ts, name],
-        ).map_err(|e| e.to_string())?;
+        let rows = self
+            .conn
+            .execute(
+                "UPDATE skills SET content = ?1, updated_at = ?2 WHERE name = ?3",
+                params![content, ts, name],
+            )
+            .map_err(|e| e.to_string())?;
         if rows == 0 {
             return Err(format!("技能 '{}' 不存在", name));
         }

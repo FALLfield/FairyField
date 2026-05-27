@@ -1,7 +1,7 @@
 //! Tauri IPC commands for gateway subsystem
 
 use super::cron::CronScheduler;
-use super::discord::{DiscordConfig, DiscordGateway};
+use super::discord::DiscordGateway;
 use std::sync::Mutex;
 use tauri::State;
 

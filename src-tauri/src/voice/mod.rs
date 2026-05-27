@@ -126,14 +126,14 @@ impl VoicePipeline {
 
     /// 合成文本并播放到扬声器
     pub async fn speak(&self, text: &str) -> Result<TtsResult, PipelineError> {
-        let mut tts = self.tts.lock().await;
+        let tts = self.tts.lock().await;
         let result = tts.speak(text)?;
         Ok(result)
     }
 
     /// 停止 TTS 播放
     pub async fn stop_tts(&self) {
-        let mut tts = self.tts.lock().await;
+        let tts = self.tts.lock().await;
         tts.stop();
     }
 

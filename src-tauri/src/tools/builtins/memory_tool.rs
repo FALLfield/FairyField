@@ -3,8 +3,8 @@
 //! memory_search 和 memory_save。
 //! 支持 mock 模式（new()）和真实 MemoryLayers 访问（with_layers()）。
 
-use super::executor::{Tool, ToolError};
 use crate::memory::MemoryLayers;
+use crate::tools::executor::{Tool, ToolError};
 use serde::Deserialize;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -31,6 +31,12 @@ fn default_limit() -> u32 {
 /// 搜索长期记忆（FTS5 全文搜索）
 pub struct MemorySearchTool {
     layers: Option<Arc<Mutex<MemoryLayers>>>,
+}
+
+impl Default for MemorySearchTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemorySearchTool {
@@ -180,6 +186,12 @@ fn auto_classify(content: &str) -> (&'static str, &'static str) {
 /// 保存信息到长期记忆
 pub struct MemorySaveTool {
     layers: Option<Arc<Mutex<MemoryLayers>>>,
+}
+
+impl Default for MemorySaveTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemorySaveTool {
@@ -335,10 +347,7 @@ mod tests {
 
         // 搜索应能找到
         let search_tool = MemorySearchTool::with_layers(layers);
-        let search_result = search_tool
-            .execute(r#"{"query": "rust"}"#)
-            .await
-            .unwrap();
+        let search_result = search_tool.execute(r#"{"query": "rust"}"#).await.unwrap();
         let found: Vec<serde_json::Value> = serde_json::from_str(&search_result).unwrap();
         assert_eq!(found.len(), 1);
         assert!(found[0]["content"].as_str().unwrap().contains("rust"));
@@ -358,9 +367,7 @@ mod tests {
         }
 
         let tool = MemorySearchTool::with_layers(layers);
-        let result = tool
-            .execute(r#"{"query": "Rust", "limit": 5}"#)
-            .await;
+        let result = tool.execute(r#"{"query": "Rust", "limit": 5}"#).await;
         let json: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
         assert!(!json.is_empty());
         assert!(json[0]["content"].as_str().unwrap().contains("Rust"));

@@ -103,7 +103,7 @@ impl Drop for AudioOutput {
 
 /// 音频线程主循环
 fn audio_thread(cmd_rx: Receiver<AudioCommand>, result_tx: Sender<AudioResult>) {
-    let mut current_stream: Option<Stream> = None;
+    let mut _current_stream: Option<Stream> = None;
 
     loop {
         match cmd_rx.recv() {
@@ -112,11 +112,11 @@ fn audio_thread(cmd_rx: Receiver<AudioCommand>, result_tx: Sender<AudioResult>) 
                 sample_rate,
             }) => {
                 // 停止之前的播放
-                current_stream = None;
+                _current_stream = None;
 
                 match play_samples(&samples, sample_rate) {
                     Ok(stream) => {
-                        current_stream = Some(stream);
+                        _current_stream = Some(stream);
                         let _ = result_tx.send(AudioResult::Done);
                     }
                     Err(e) => {
@@ -125,7 +125,7 @@ fn audio_thread(cmd_rx: Receiver<AudioCommand>, result_tx: Sender<AudioResult>) 
                 }
             }
             Ok(AudioCommand::Stop) => {
-                current_stream = None;
+                _current_stream = None;
             }
             Ok(AudioCommand::Shutdown) | Err(_) => {
                 break;

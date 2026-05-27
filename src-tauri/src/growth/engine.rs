@@ -93,7 +93,8 @@ impl GrowthEngine {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     /// 获取用户画像（从经验中提取）
@@ -142,9 +143,12 @@ impl GrowthEngine {
             .prepare("SELECT category, COUNT(*) FROM experiences GROUP BY category")
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -166,7 +170,9 @@ mod tests {
     #[test]
     fn save_and_retrieve_experience() {
         let engine = make_engine();
-        let id = engine.save_experience("preference", "喜欢猫", None).unwrap();
+        let id = engine
+            .save_experience("preference", "喜欢猫", None)
+            .unwrap();
         assert!(id > 0);
         let recent = engine.get_recent_experiences(10).unwrap();
         assert_eq!(recent.len(), 1);

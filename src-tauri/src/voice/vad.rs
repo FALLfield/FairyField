@@ -112,9 +112,7 @@ pub struct SileroVad {
 impl SileroVad {
     #[cfg(feature = "sherpa-onnx")]
     pub fn new(model_path: std::path::PathBuf) -> Result<Self, VadError> {
-        use sherpa_onnx::vad::{
-            SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
-        };
+        use sherpa_onnx::vad::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 
         let config = VadModelConfig {
             silero_vad: SileroVadModelConfig {
@@ -176,18 +174,5 @@ impl VadEngine for SileroVad {
         } else {
             "sherpa-onnx-silero-vad (stub)"
         }
-    }
-}
-
-/// 总是返回 Speech 的 VAD（用于跳过 VAD 检测）
-struct AlwaysSpeechVad;
-
-impl VadEngine for AlwaysSpeechVad {
-    fn detect(&self, _samples: &[f32], _sample_rate: u32) -> Result<VadState, VadError> {
-        Ok(VadState::Speech)
-    }
-
-    fn name(&self) -> &str {
-        "always-speech"
     }
 }

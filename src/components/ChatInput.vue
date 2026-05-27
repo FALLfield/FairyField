@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref } from 'vue';
+
 defineProps<{
   inputText: string;
   isStreaming: boolean;
@@ -13,8 +15,22 @@ const emit = defineEmits<{
   (e: 'toggle-mic'): void;
 }>();
 
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+
+function autoResize(): void {
+  const ta = textareaRef.value;
+  if (!ta) return;
+  ta.rows = 1;
+  const lineHeight = 24;
+  const padding = 14;
+  const scrollContentHeight = ta.scrollHeight - padding;
+  const newRows = Math.min(5, Math.max(1, Math.ceil(scrollContentHeight / lineHeight)));
+  ta.rows = newRows;
+}
+
 function onInput(e: Event): void {
   emit('update:inputText', (e.target as HTMLTextAreaElement).value);
+  autoResize();
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -34,6 +50,7 @@ function onKeydown(e: KeyboardEvent): void {
       <button class="stop-recording-btn" @click="emit('toggle-mic')" aria-label="停止录音">停止</button>
     </div>
     <textarea
+      ref="textareaRef"
       v-else
       :value="inputText"
       class="message-input"
@@ -50,7 +67,7 @@ function onKeydown(e: KeyboardEvent): void {
       :disabled="isStreaming"
       aria-label="语音输入"
       title="语音输入"
-      @click="emit('toggle-mic')"
+      @click.stop="emit('toggle-mic')"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>

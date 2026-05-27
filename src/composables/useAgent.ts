@@ -63,6 +63,9 @@ export function useAgent() {
 
   // 流式超时保护：120s 后强制关闭 loading 状态
   let streamTimeout: ReturnType<typeof setTimeout> | null = null;
+  let aborted = false;
+  // 追踪延迟渲染的 timer，确保在 finally 中清理
+  let deferredRenderTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** 发送消息并接收流式回复 */
   async function send(message: string): Promise<void> {
@@ -79,6 +82,7 @@ export function useAgent() {
 
     messages.value = [...messages.value, userMessage];
 
+    aborted = false;
     try {
       isStreaming.value = true;
       currentReply.value = '';
@@ -94,14 +98,37 @@ export function useAgent() {
       }, 120_000);
 
       let streamedContent = '';
+      let lastRenderTime = 0;
 
       // 流式返回 + 获取后端情绪数据
       const response = await tauriCommands.agentChatStream(message, (event) => {
+        if (aborted) return;
         if (event.type === 'chunk') {
           streamedContent += event.content;
-          currentReply.value = streamedContent;
+          const now = performance.now();
+          // 确保至少 15ms 的渲染间隔来实现可见的打字效果
+          // 如果 chunks 到达太快，延迟到下一个 15ms 窗口渲染
+          if (now - lastRenderTime >= 15) {
+            // 立即渲染
+            if (deferredRenderTimer) {
+              clearTimeout(deferredRenderTimer);
+              deferredRenderTimer = null;
+            }
+            currentReply.value = streamedContent;
+            lastRenderTime = now;
+          } else if (!deferredRenderTimer) {
+            // 安排延迟渲染，避免一次性批量更新
+            deferredRenderTimer = setTimeout(() => {
+              currentReply.value = streamedContent;
+              lastRenderTime = performance.now();
+              deferredRenderTimer = null;
+            }, 15);
+          }
         }
       });
+
+      // 如果已中止，不做任何处理
+      if (aborted) return;
 
       // 使用后端返回的清理后回复（不含 [emotion:xxx] 标签）
       const replyText = response.reply || streamedContent || '(思考中...)';
@@ -136,7 +163,15 @@ export function useAgent() {
       emotionEngine.reset();
       fairyEmotion.value = 'neutral';
     } finally {
-      if (streamTimeout) clearTimeout(streamTimeout);
+      // 清理所有定时器和延迟回调
+      if (deferredRenderTimer) {
+        clearTimeout(deferredRenderTimer);
+        deferredRenderTimer = null;
+      }
+      if (streamTimeout) {
+        clearTimeout(streamTimeout);
+        streamTimeout = null;
+      }
       isStreaming.value = false;
       currentReply.value = '';
     }
@@ -144,7 +179,15 @@ export function useAgent() {
 
   /** 中断当前流式回复 */
   function abort(): void {
-    if (streamTimeout) clearTimeout(streamTimeout);
+    aborted = true;
+    if (deferredRenderTimer) {
+      clearTimeout(deferredRenderTimer);
+      deferredRenderTimer = null;
+    }
+    if (streamTimeout) {
+      clearTimeout(streamTimeout);
+      streamTimeout = null;
+    }
     isStreaming.value = false;
     currentReply.value = '';
   }
@@ -165,6 +208,8 @@ export function useAgent() {
 
   onUnmounted(() => {
     stopEmotionTick();
+    if (deferredRenderTimer) clearTimeout(deferredRenderTimer);
+    if (streamTimeout) clearTimeout(streamTimeout);
   });
 
   return {

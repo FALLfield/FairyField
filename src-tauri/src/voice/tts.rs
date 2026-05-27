@@ -153,6 +153,12 @@ impl MacSayTts {
     }
 }
 
+impl Default for MacSayTts {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TtsEngine for MacSayTts {
     fn synthesize(&self, text: &str) -> Result<TtsResult, TtsError> {
         // 清理文本：去除 markdown、emoji 等非语音内容

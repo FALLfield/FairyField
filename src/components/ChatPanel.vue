@@ -4,7 +4,7 @@
  *
  * 组合 ChatHistory（折叠/展开气泡列表）和 ChatInput（输入区域）。
  */
-import { ref, nextTick, watch, useTemplateRef } from 'vue';
+import { ref } from 'vue';
 import ChatHistory from './ChatHistory.vue';
 import ChatInput from './ChatInput.vue';
 import type { AgentMessage } from '../composables/useAgent';
@@ -29,20 +29,10 @@ const emit = defineEmits<{
 
 const isExpanded = ref(false);
 const inputText = ref('');
-const historyListRef = useTemplateRef<HTMLDivElement>('historyList');
-
-function scrollToBottom(): void {
-  nextTick(() => {
-    if (historyListRef.value) historyListRef.value.scrollTop = historyListRef.value.scrollHeight;
-  });
-}
-
-watch(() => props.messages.length, () => scrollToBottom());
-watch(() => props.currentReply, () => scrollToBottom());
 
 function handleSend(): void {
   const text = inputText.value.trim();
-  if (!text || props.isStreaming) return;
+  if (!text || props.isStreaming || props.isRecording) return;
   inputText.value = '';
   emit('send', text);
 }
@@ -56,7 +46,7 @@ function handleSend(): void {
       :is-streaming="isStreaming"
       :current-reply="currentReply"
       :is-expanded="isExpanded"
-      @expand="isExpanded = true; scrollToBottom()"
+      @expand="isExpanded = true"
       @collapse="isExpanded = false"
       @clear="emit('clear')"
     />
@@ -85,12 +75,15 @@ function handleSend(): void {
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  pointer-events: auto; overflow: hidden;
+  pointer-events: auto; overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
   transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s ease;
   animation: panel-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.chat-panel:not(.is-expanded) { max-height: 180px; background: rgba(10, 10, 10, 0.45); border-color: rgba(255, 255, 255, 0.04); }
-.chat-panel.is-expanded { max-height: 50vh; }
+.chat-panel::-webkit-scrollbar { width: 3px; }
+.chat-panel::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 2px; }
+.chat-panel:not(.is-expanded) { max-height: 200px; background: rgba(10, 10, 10, 0.45); border-color: rgba(255, 255, 255, 0.04); }
+.chat-panel.is-expanded { max-height: 60vh; }
 
 .chat-error {
   padding: 6px 12px; font-size: 0.75rem;

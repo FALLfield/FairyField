@@ -128,9 +128,9 @@ export class VRMRenderer {
       throw new Error(`加载的文件 ${url} 不包含 VRM 数据`);
     }
 
-    // VRM 标准处理：旋转 Y 轴使角色面朝相机，清理不必要的 morph target
+    // VRM 标准处理：旋转 Y 轴使角色面朝相机，清理几何和骨骼数据
     VRMUtils.removeUnnecessaryVertices(gltf.scene);
-    VRMUtils.removeUnnecessaryJoints(gltf.scene);
+    VRMUtils.combineSkeletons(gltf.scene);
     loadedVrm.scene.rotation.y = Math.PI;
 
     // 禁用视锥体裁剪，避免透明窗口下角色被错误裁剪

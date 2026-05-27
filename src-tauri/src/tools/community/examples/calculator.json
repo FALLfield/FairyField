@@ -1,0 +1,31 @@
+{
+  "manifest": {
+    "id": "community.calculator",
+    "name": "Community Calculator",
+    "description": "Return a static calculator plugin response for loader tests.",
+    "category": "community",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "Arithmetic expression"
+        }
+      },
+      "required": ["expression"]
+    },
+    "permissions": [],
+    "rate_limit": 100,
+    "timeout_ms": 1000,
+    "enabled_by_default": true,
+    "version": "1.0.0",
+    "author": "FairyField examples"
+  },
+  "provider": {
+    "type": "static_response",
+    "response": {
+      "status": "loaded",
+      "note": "Execution is intentionally not implemented in Phase 6 loader tests."
+    }
+  }
+}

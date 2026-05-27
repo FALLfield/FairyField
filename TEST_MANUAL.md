@@ -1,0 +1,88 @@
+# FairyField Manual Test Checklist
+
+> v1.0.0 release candidate, 2026-05-26. Automated baseline: 369 Rust tests + 97 frontend tests = 466 passed.
+
+## 1. Automated Preflight
+
+Run from `FairyField/`:
+
+```bash
+npm run build
+npm run test
+```
+
+Run from `FairyField/src-tauri/`:
+
+```bash
+cargo check
+cargo test
+cargo clippy -- -D warnings
+cargo fmt --check
+```
+
+Expected:
+
+- Frontend: 8 files, 97 tests passed.
+- Rust: 369 tests passed.
+- No clippy warnings.
+
+## 2. Desktop Smoke Test
+
+Run:
+
+```bash
+npm run tauri dev
+```
+
+Check:
+
+- Transparent always-on-top window opens.
+- Default 3D character loads from `public/models/default/2031903848872972007.glb`.
+- Chat input accepts text and sends a message.
+- Streaming reply appears without leaking `[emotion:...]` tags.
+- ControlPanel is top-left and collapsed by default.
+- ChatPanel remains usable while the canvas is visible.
+- Ctrl+Shift+D toggles developer mode.
+- Ctrl+1 through Ctrl+8 trigger expression debug hotkeys.
+
+## 3. Onboarding
+
+On a fresh profile or after temporarily moving `~/.fairyfield/user.json`:
+
+- First launch shows the onboarding wizard.
+- Step 1 stores user name.
+- Step 2 stores call preference.
+- Step 3 stores personality preference.
+- Step 4 can skip LLM config or save/test a provider key.
+- `~/.fairyfield/user.json` is created.
+- API keys are not written to public `config/default.json`.
+
+## 4. Voice
+
+With models installed under `~/.fairyfield/models/`:
+
+- Microphone permission prompt appears on first use.
+- VAD detects speech start/stop.
+- ASR returns recognized text into the chat input.
+- TTS plays the assistant reply.
+- Missing models fall back cleanly without crashing text chat.
+
+## 5. Memory And Tools
+
+Check from chat or developer mode:
+
+- User facts can be saved and recalled.
+- Memory search wraps recalled context in `<memory-context>`.
+- Tool list includes builtins, MCP-related tools, and community plugin surfaces.
+- `fairy.execute_tool` returns a real tool result rather than a stub.
+- Unsafe shell commands are blocked by the command guard.
+
+## 6. Release Gate
+
+The build is release-ready when:
+
+- All automated preflight commands pass.
+- Desktop smoke test passes.
+- Onboarding persists config correctly.
+- No API key appears in tracked files or console output.
+- `README.md`, `CHANGELOG.md`, `CLAUDE.md`, and `docs/USAGE_GUIDE.md` match the release version.

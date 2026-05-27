@@ -3,7 +3,6 @@
 //! 基于固定间隔的定时任务，每秒 tick 一次。
 
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 
 /// 定时任务
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +21,12 @@ pub struct CronJob {
 /// 定时任务调度器
 pub struct CronScheduler {
     jobs: Vec<CronJob>,
+}
+
+impl Default for CronScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CronScheduler {

@@ -1,0 +1,44 @@
+{
+  "manifest": {
+    "id": "community.weather_forecast",
+    "name": "Community Weather Forecast",
+    "description": "Query current weather and a short forecast for a city.",
+    "category": "community",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string",
+          "description": "City name"
+        },
+        "days": {
+          "type": "integer",
+          "description": "Forecast days from 1 to 7"
+        }
+      },
+      "required": ["city"]
+    },
+    "permissions": ["network_access"],
+    "rate_limit": 10,
+    "timeout_ms": 10000,
+    "enabled_by_default": false,
+    "version": "1.0.0",
+    "author": "FairyField examples"
+  },
+  "provider": {
+    "type": "http",
+    "endpoint": "https://api.openweathermap.org/data/2.5/forecast",
+    "method": "GET",
+    "headers": {
+      "Accept": "application/json"
+    },
+    "query_params": {
+      "q": "{{parameters.city}}",
+      "cnt": "{{parameters.days}}",
+      "appid": "${env.OPENWEATHER_API_KEY}"
+    },
+    "response_mapping": {
+      "path": "$.list[*]"
+    }
+  }
+}

@@ -43,7 +43,7 @@
     "language": "zh"
   },
   "character": {
-    "model_path": "models/default/default.vrm",
+    "model_path": "models/default/2031903848872972007.glb",
     "default_expression": "neutral"
   },
   "window": {

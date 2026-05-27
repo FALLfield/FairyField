@@ -40,6 +40,12 @@ impl EmbeddingService {
     }
 }
 
+impl Default for EmbeddingService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 计算余弦相似度
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() || a.is_empty() {
@@ -98,6 +104,12 @@ impl EmbeddingSearcher {
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scored.truncate(limit);
         scored
+    }
+}
+
+impl Default for EmbeddingSearcher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

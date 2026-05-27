@@ -4,7 +4,6 @@
 //! 缓存系统 prompt + 最近 3 轮对话，减少重复 token 计费。
 //! 参考 Hermes agent/prompt_caching.py。
 
-use super::{Message, MessageRole};
 use serde::{Deserialize, Serialize};
 
 /// 缓存策略
@@ -70,7 +69,7 @@ impl PromptCache {
     /// 标记消息的缓存控制标记（Anthropic 格式）
     ///
     /// 返回标记了 cache_control 的消息列表和缓存统计更新。
-    pub fn apply_cache_control(&mut self, messages: &mut Vec<serde_json::Value>) -> bool {
+    pub fn apply_cache_control(&mut self, messages: &mut [serde_json::Value]) -> bool {
         if matches!(self.strategy, CacheStrategy::None) || messages.is_empty() {
             self.stats.total_requests += 1;
             return false;
@@ -97,7 +96,7 @@ impl PromptCache {
     }
 
     /// System + 3 策略：在 system 消息和第 3 轮对话末尾添加 ephemeral 缓存标记
-    fn mark_system_and_3(&self, messages: &mut Vec<serde_json::Value>) -> bool {
+    fn mark_system_and_3(&self, messages: &mut [serde_json::Value]) -> bool {
         let mut marked = false;
 
         // 标记 system 消息
@@ -137,7 +136,7 @@ impl PromptCache {
     }
 
     /// All 策略：标记最后一条消息
-    fn mark_all(&self, messages: &mut Vec<serde_json::Value>) -> bool {
+    fn mark_all(&self, messages: &mut [serde_json::Value]) -> bool {
         if let Some(last) = messages.last_mut() {
             if let Some(obj) = last.as_object_mut() {
                 obj.insert(
@@ -197,11 +196,14 @@ pub fn apply_anthropic_cache(body: &mut serde_json::Value) -> bool {
     if let Some(system_val) = body.get("system").cloned() {
         if let Some(text) = system_val.as_str() {
             if let Some(obj) = body.as_object_mut() {
-                obj.insert("system".into(), serde_json::json!([{
-                    "type": "text",
-                    "text": text,
-                    "cache_control": { "type": "ephemeral" }
-                }]));
+                obj.insert(
+                    "system".into(),
+                    serde_json::json!([{
+                        "type": "text",
+                        "text": text,
+                        "cache_control": { "type": "ephemeral" }
+                    }]),
+                );
                 applied = true;
             }
         }
@@ -220,7 +222,11 @@ pub fn apply_anthropic_cache(body: &mut serde_json::Value) -> bool {
             let idx = user_indices[user_indices.len() - 2];
             if let Some(msg) = messages.get_mut(idx) {
                 // 将字符串 content 转为内容块数组
-                if let Some(content) = msg.get("content").and_then(|v| v.as_str()).map(|s| s.to_string()) {
+                if let Some(content) = msg
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                {
                     if let Some(msg_obj) = msg.as_object_mut() {
                         msg_obj.insert(
                             "content".into(),

@@ -30,12 +30,12 @@ See `CLAUDE.md` for full conventions. Quick summary:
 
 ```bash
 # Frontend
-npm run test          # 93 tests must pass
+npm run test          # all frontend tests must pass
 npm run build         # no errors
 
 # Backend
 cd src-tauri
-cargo test            # 248 tests must pass
+cargo test            # all Rust tests must pass
 cargo clippy -- -D warnings
 cargo fmt --check
 ```
@@ -58,4 +58,4 @@ The project follows a multi-agent architecture (see `CLAUDE.md`):
 
 - Open an issue for bugs or feature requests
 - Check `docs/USAGE_GUIDE.md` for setup help
-- See `PROPOSAL.md` for technical architecture details
+- See `ARCHITECTURE.md` and `PROJECT_STRUCTURE.md` for technical architecture details

@@ -46,7 +46,7 @@ npm run tauri build
 
 ### LLM 提供商
 
-支持多个 LLM 提供商，可通过 `Ctrl+Shift+D` 打开控制面板切换：
+支持多个 LLM 提供商，可在左上角折叠的 ControlPanel 中展开切换：
 
 ```json
 {
@@ -93,7 +93,7 @@ cargo build --features sherpa-onnx
 将 VRM 格式的 3D 模型放到 `public/models/default/`：
 ```
 public/models/default/
-├── default.vrm          # 主模型文件（.vrm 或 .glb）
+├── 2031903848872972007.glb  # 默认模型文件（可替换为 .vrm 或 .glb）
 └── textures/            # 纹理（可选）
 ```
 
@@ -111,7 +111,7 @@ public/models/default/
 ### 开发者模式
 
 - `Ctrl+Shift+D` — 切换开发者面板
-- 可查看记忆库、工具调用日志、切换 LLM 提供商
+- 可查看记忆库、工具调用日志和 Agent 状态
 - 三次点击角色头像也可切换
 
 ### 情绪系统
@@ -169,11 +169,11 @@ npm run tauri build
 
 - Phase 0-4：✅ 已完成
 - Phase 4.5：✅ 已完成
-- Phase 5：🔄 进行中
+- Phase 5：✅ 已完成
+- Phase 6：✅ 已完成
 - 全息模式：⏳ 延后
 
 ## 获取帮助
 
 - GitHub Issues: [github.com/fallfield/FairyField/issues](https://github.com/fallfield/FairyField/issues)
 - 查看 `CLAUDE.md` 了解开发约定
-- 查看 `PROPOSAL.md` 了解技术架构

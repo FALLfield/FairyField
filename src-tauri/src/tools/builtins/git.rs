@@ -2,7 +2,21 @@
 //!
 //! 封装常用 Git 操作，供 Agent 工具调用。
 
-use super::executor::{Tool, ToolError};
+use crate::tools::executor::{Tool, ToolError};
+use std::process::Command;
+
+const MAX_OUTPUT_BYTES: usize = 10_000;
+
+fn truncate_to_bytes(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
 
 /// Git 工具
 pub struct GitTool {
@@ -60,10 +74,41 @@ impl Tool for GitTool {
     {
         let cmd = input.to_string();
         Box::pin(async move {
-            // Phase 3 实现：使用 tokio::process::Command 执行 git 命令
-            Err(ToolError::ExecutionFailed(format!(
-                "Git 执行尚未实现: {cmd}"
-            )))
+            let subcmd = cmd
+                .strip_prefix("git ")
+                .ok_or_else(|| ToolError::ValidationFailed("命令必须以 git 开头".into()))?
+                .trim()
+                .to_string();
+            let args = subcmd
+                .split_whitespace()
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+
+            tokio::task::spawn_blocking(move || {
+                let output = Command::new("git")
+                    .args(&args)
+                    .output()
+                    .map_err(|e| ToolError::ExecutionFailed(format!("Git 启动失败: {e}")))?;
+
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let combined = if stderr.trim().is_empty() {
+                    stdout.to_string()
+                } else if stdout.trim().is_empty() {
+                    stderr.to_string()
+                } else {
+                    format!("{}\n{}", stdout, stderr)
+                };
+                let truncated = truncate_to_bytes(&combined, MAX_OUTPUT_BYTES).to_string();
+
+                if output.status.success() {
+                    Ok(truncated)
+                } else {
+                    Err(ToolError::ExecutionFailed(truncated))
+                }
+            })
+            .await
+            .unwrap_or_else(|e| Err(ToolError::ExecutionFailed(format!("Git 执行线程崩溃: {e}"))))
         })
     }
 }
@@ -96,5 +141,12 @@ mod tests {
         assert!(!tool.validate_input("git push origin main"));
         assert!(!tool.validate_input("ls"));
         assert!(!tool.validate_input(""));
+    }
+
+    #[tokio::test]
+    async fn execute_status_returns_real_git_output() {
+        let tool = GitTool::new();
+        let result = tool.execute("git status --short").await.unwrap();
+        assert!(!result.contains("Git 执行尚未实现"));
     }
 }

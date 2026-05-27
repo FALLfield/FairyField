@@ -165,14 +165,11 @@ fn serialize_messages_for_claude(messages: &[Message]) -> Vec<serde_json::Value>
 }
 
 /// 将累积的 tool_result 刷出为一条 user 消息
-fn flush_tool_results(
-    result: &mut Vec<serde_json::Value>,
-    pending: &mut Vec<serde_json::Value>,
-) {
+fn flush_tool_results(result: &mut Vec<serde_json::Value>, pending: &mut Vec<serde_json::Value>) {
     if pending.is_empty() {
         return;
     }
-    let blocks: Vec<serde_json::Value> = pending.drain(..).collect();
+    let blocks = std::mem::take(pending);
     result.push(json!({ "role": "user", "content": blocks }));
 }
 
@@ -340,7 +337,7 @@ impl OpenAiProvider {
     fn build_body(
         &self,
         messages: &[Message],
-        config: &ChatConfig,
+        _config: &ChatConfig,
         stream: bool,
     ) -> serde_json::Value {
         json!({
@@ -582,19 +579,13 @@ impl LlmProvider for OpenAiProvider {
                         arguments: tc.function.arguments.clone(),
                     })
                     .collect();
-                let text = choice
-                    .message
-                    .content
-                    .clone()
-                    .filter(|s| !s.is_empty());
+                let text = choice.message.content.clone().filter(|s| !s.is_empty());
                 Ok(LlmResponse::ToolCalls { calls, text })
             } else {
-                let content = choice
-                    .message
-                    .content
-                    .clone()
-                    .filter(|s| !s.is_empty());
-                Ok(LlmResponse::Text(content.unwrap_or_else(|| "[思考中...]".to_string())))
+                let content = choice.message.content.clone().filter(|s| !s.is_empty());
+                Ok(LlmResponse::Text(
+                    content.unwrap_or_else(|| "[思考中...]".to_string()),
+                ))
             }
         })
     }
@@ -953,7 +944,10 @@ impl LlmProvider for ClaudeProvider {
                 } else {
                     Some(text_parts.join(""))
                 };
-                Ok(LlmResponse::ToolCalls { calls: tool_calls, text })
+                Ok(LlmResponse::ToolCalls {
+                    calls: tool_calls,
+                    text,
+                })
             } else if text_parts.is_empty() {
                 Err(LlmError("响应中无文本内容".to_string()))
             } else {

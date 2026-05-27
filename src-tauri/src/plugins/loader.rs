@@ -93,19 +93,14 @@ impl PluginLoader {
                         if plugin.enabled {
                             eprintln!(
                                 "[plugin] Loaded: {} v{}",
-                                plugin.meta.name,
-                                plugin.meta.version
+                                plugin.meta.name, plugin.meta.version
                             );
                             self.plugins.push(plugin);
                             count += 1;
                         }
                     }
                     Err(e) => {
-                        eprintln!(
-                            "[plugin] Failed to load {:?}: {}",
-                            path.file_name(),
-                            e
-                        );
+                        eprintln!("[plugin] Failed to load {:?}: {}", path.file_name(), e);
                     }
                 }
             }
@@ -116,8 +111,7 @@ impl PluginLoader {
 
     /// 加载单个插件文件
     fn load_plugin(&self, path: &std::path::Path) -> Result<PluginDefinition, String> {
-        let content =
-            std::fs::read_to_string(path).map_err(|e| format!("Read error: {}", e))?;
+        let content = std::fs::read_to_string(path).map_err(|e| format!("Read error: {}", e))?;
         let plugin: PluginDefinition =
             serde_json::from_str(&content).map_err(|e| format!("Parse error: {}", e))?;
         Ok(plugin)
@@ -153,7 +147,7 @@ mod tests {
         let plugin = PluginDefinition {
             meta: PluginMeta {
                 name: "test".into(),
-                version: "0.1.0".into(),
+                version: "1.0.0".into(),
                 description: "test plugin".into(),
                 author: "test".into(),
             },
@@ -216,7 +210,7 @@ mod tests {
         let plugin_json = r#"{
             "meta": {
                 "name": "disabled_plugin",
-                "version": "0.1.0",
+                "version": "1.0.0",
                 "description": "Should be skipped",
                 "author": "test"
             },

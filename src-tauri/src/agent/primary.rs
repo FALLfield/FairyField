@@ -3,13 +3,13 @@
 //! 负责对话管理、历史记录、情绪状态机。
 //! Tauri commands 定义在 lib.rs（platform Agent 管理），本模块提供业务逻辑。
 
+use crate::agent::toolset::Toolset;
 use crate::llm::provider::{create_provider, LlmProvider};
 use crate::llm::{
-    ChatConfig, LlmError, LlmProviderConfig, Message, MessageRole, LlmResponse, ToolDefinition,
+    ChatConfig, LlmError, LlmProviderConfig, LlmResponse, Message, MessageRole, ToolDefinition,
 };
-use crate::agent::toolset::{Toolset, ToolsetError};
-use crate::memory::MemoryLayers;
 use crate::memory::miner::ConversationMiner;
+use crate::memory::MemoryLayers;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -361,9 +361,7 @@ impl PrimaryAgent {
             self.run_agent_loop(messages, chat_config, tool_defs, max_rounds, None),
         )
         .await
-        .unwrap_or_else(|_| {
-            Err(LlmError("Agent 循环超时（120s），请稍后重试".to_string()))
-        })?;
+        .unwrap_or_else(|_| Err(LlmError("Agent 循环超时（120s），请稍后重试".to_string())))?;
 
         // 5. 解析情绪标签
         let (cleaned_reply, emotion_kind) = parse_emotion_tag(&final_text);
@@ -438,12 +436,16 @@ impl PrimaryAgent {
         let max_rounds = self.config.max_tool_rounds;
         let full_reply = tokio::time::timeout(
             Duration::from_secs(120),
-            self.run_agent_loop(messages, chat_config, tool_defs, max_rounds, Some(app_handle.clone())),
+            self.run_agent_loop(
+                messages,
+                chat_config,
+                tool_defs,
+                max_rounds,
+                Some(app_handle.clone()),
+            ),
         )
         .await
-        .unwrap_or_else(|_| {
-            Err(LlmError("Agent 循环超时（120s），请稍后重试".to_string()))
-        })?;
+        .unwrap_or_else(|_| Err(LlmError("Agent 循环超时（120s），请稍后重试".to_string())))?;
 
         // 5. 解析情绪标签（必须在流式发送前，避免 [emotion:xxx] 泄漏到前端）
         let (cleaned_reply, emotion_kind) = parse_emotion_tag(&full_reply);
@@ -536,13 +538,16 @@ impl PrimaryAgent {
             }
             if !parts.is_empty() {
                 // 插入到 system prompt 之后
-                messages.insert(1, Message {
-                    role: MessageRole::System,
-                    content: format!("[Memory Context]\n{}", parts.join("\n")),
-                    timestamp: current_timestamp(),
-                    tool_call_id: None,
-                    tool_calls: None,
-                });
+                messages.insert(
+                    1,
+                    Message {
+                        role: MessageRole::System,
+                        content: format!("[Memory Context]\n{}", parts.join("\n")),
+                        timestamp: current_timestamp(),
+                        tool_call_id: None,
+                        tool_calls: None,
+                    },
+                );
             }
         }
 
@@ -555,14 +560,20 @@ impl PrimaryAgent {
                     .collect::<Vec<_>>()
                     .join("\n");
                 // 插入到记忆上下文之后
-                let insert_pos = messages.iter().take_while(|m| m.role == MessageRole::System).count();
-                messages.insert(insert_pos, Message {
-                    role: MessageRole::System,
-                    content: format!("[Relevant Memories]\n{}", mem_str),
-                    timestamp: current_timestamp(),
-                    tool_call_id: None,
-                    tool_calls: None,
-                });
+                let insert_pos = messages
+                    .iter()
+                    .take_while(|m| m.role == MessageRole::System)
+                    .count();
+                messages.insert(
+                    insert_pos,
+                    Message {
+                        role: MessageRole::System,
+                        content: format!("[Relevant Memories]\n{}", mem_str),
+                        timestamp: current_timestamp(),
+                        tool_call_id: None,
+                        tool_calls: None,
+                    },
+                );
             }
         }
     }
@@ -711,18 +722,41 @@ impl PrimaryAgent {
             })
             .collect();
 
-        let mut miner_guard = match miner.lock() {
+        let miner_guard = match miner.lock() {
             Ok(m) => m,
             Err(_) => return,
         };
 
         let mined = miner_guard.mine(&chat_messages);
-        if mined.is_empty() {
-            return;
+        if !mined.is_empty() {
+            if let Err(e) = miner_guard.save_mined(&mined) {
+                eprintln!("[WARN] 记忆入库失败: {}", e);
+            }
         }
 
-        if let Err(e) = miner_guard.save_mined(&mined) {
-            eprintln!("[WARN] 记忆入库失败: {}", e);
+        // 后备机制：即使关键词挖掘未命中，也保存最近一轮对话作为基础记忆。
+        // 这确保 MemoryPanel 始终有内存可显示，不过度依赖关键词匹配。
+        let last_user_msg = recent
+            .iter()
+            .rev()
+            .find(|m| m.role == MessageRole::User)
+            .map(|m| m.content.clone());
+        if let Some(user_content) = last_user_msg {
+            let truncated: String = user_content.chars().take(500).collect();
+            // 仅当内容有一定长度时才保存，避免空消息污染记忆库
+            if truncated.len() > 5 {
+                if let Err(e) = miner_guard.store.save_drawer(
+                    &truncated,
+                    "daily",
+                    "conversation",
+                    "fallback",
+                    "conversation",
+                    "",
+                    0.3,
+                ) {
+                    eprintln!("[WARN] 后备记忆保存失败: {}", e);
+                }
+            }
         }
     }
 
@@ -763,6 +797,45 @@ pub struct ChatResponse {
 /// 使用 Mutex 包装 Arc 以支持运行时动态切换提供商。
 pub struct AgentState {
     pub agent: tokio::sync::Mutex<Arc<PrimaryAgent>>,
+    /// Agent 配置（用于重建 Agent）
+    pub agent_config: AgentConfig,
+    /// 工具集（用于重建 Agent 时保留工具能力）
+    pub toolset: Option<Arc<Toolset>>,
+    /// 记忆层（用于重建 Agent 时保留记忆访问）
+    pub memory_layers: Option<Arc<std::sync::Mutex<MemoryLayers>>>,
+    /// 对话挖掘器（用于重建 Agent 时保留挖掘能力）
+    pub miner: Option<Arc<std::sync::Mutex<ConversationMiner>>>,
+}
+
+impl AgentState {
+    /// 使用新的 LLM provider 重建 Agent，保留工具、记忆和挖掘能力
+    pub async fn recreate_agent(&self, provider: Arc<dyn LlmProvider>) {
+        let mut agent = if let (Some(toolset), Some(layers), Some(miner)) =
+            (&self.toolset, &self.memory_layers, &self.miner)
+        {
+            let mut new_agent = PrimaryAgent::with_tools_and_memory(
+                provider,
+                self.agent_config.clone(),
+                Arc::clone(toolset),
+                Arc::clone(layers),
+                Arc::clone(miner),
+            );
+            // 恢复 app_handle
+            let old = self.agent.lock().await;
+            if let Some(app_handle) = &old.app_handle {
+                new_agent.set_app_handle(app_handle.clone());
+            }
+            new_agent
+        } else {
+            PrimaryAgent::new(provider, self.agent_config.clone())
+        };
+        let mut guard = self.agent.lock().await;
+        // 保留 app_handle
+        if let Some(app_handle) = &guard.app_handle {
+            agent.set_app_handle(app_handle.clone());
+        }
+        *guard = Arc::new(agent);
+    }
 }
 
 // ========== Tauri Commands ==========
@@ -799,11 +872,13 @@ pub async fn agent_chat_stream(
     state: State<'_, AgentState>,
     app_handle: tauri::AppHandle,
 ) -> Result<ChatResponse, String> {
-    let agent = state.agent.lock().await;
-    agent
-        .chat_stream(&message, &app_handle)
-        .await
-        .map_err(|e| e.to_string())
+    let result = {
+        let agent = state.agent.lock().await;
+        agent.chat_stream(&message, &app_handle).await
+    };
+
+    let _ = app_handle.emit("agent:status", "idle");
+    result.map_err(|e| e.to_string())
 }
 
 /// 获取当前情绪状态

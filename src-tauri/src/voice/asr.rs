@@ -41,7 +41,7 @@ pub struct MockAsr {
 impl MockAsr {
     pub fn new() -> Self {
         Self {
-            mock_text: "你好呀".to_string(),
+            mock_text: String::new(),
         }
     }
 
@@ -80,6 +80,8 @@ pub fn create_asr_engine(config: &crate::config::settings::VoiceConfig) -> Box<d
             return Box::new(engine);
         }
     }
+    #[cfg(not(feature = "sherpa-onnx"))]
+    let _ = config;
     Box::new(MockAsr::new())
 }
 
@@ -99,10 +101,12 @@ fn asr_model_dir(config: &crate::config::settings::VoiceConfig) -> std::path::Pa
 /// *模型下载指引：https://k2-fsa.github.io/sherpa/onnx/pretrained_models/online-paraformer/paraformer-models.html*
 pub struct SherpaOnnxAsr {
     #[cfg(feature = "sherpa-onnx")]
-    inner: Option<std::sync::Mutex<(
-        sherpa_onnx::online_recognizer::OnlineRecognizer,
-        sherpa_onnx::online_recognizer::OnlineStream,
-    )>>,
+    inner: Option<
+        std::sync::Mutex<(
+            sherpa_onnx::online_recognizer::OnlineRecognizer,
+            sherpa_onnx::online_recognizer::OnlineStream,
+        )>,
+    >,
     #[cfg(not(feature = "sherpa-onnx"))]
     fallback: MockAsr,
 }
@@ -118,10 +122,7 @@ impl SherpaOnnxAsr {
         let config = OnlineRecognizerConfig {
             model_config: OnlineModelConfig {
                 paraformer: OnlineParaformerModelConfig {
-                    model: model_dir
-                        .join("model.onnx")
-                        .to_string_lossy()
-                        .to_string(),
+                    model: model_dir.join("model.onnx").to_string_lossy().to_string(),
                     ..Default::default()
                 },
                 ..Default::default()

@@ -4,7 +4,6 @@
 
 use super::engine::GrowthEngine;
 use super::skill::SkillManager;
-use rusqlite::Connection;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -88,7 +87,10 @@ pub fn skill_list(state: State<'_, GrowthState>) -> Result<Vec<serde_json::Value
 }
 
 #[tauri::command]
-pub fn skill_view(name: String, state: State<'_, GrowthState>) -> Result<serde_json::Value, String> {
+pub fn skill_view(
+    name: String,
+    state: State<'_, GrowthState>,
+) -> Result<serde_json::Value, String> {
     let skills = state.skills.lock().map_err(|e| e.to_string())?;
     match skills.view_skill(&name)? {
         Some(skill) => Ok(serde_json::to_value(skill).map_err(|e| e.to_string())?),

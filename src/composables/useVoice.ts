@@ -134,6 +134,8 @@ export function useVoice() {
 
   /** 注册 Tauri 事件监听 */
   onMounted(async () => {
+    if (!tauriCommands.isTauriEnvironment()) return;
+
     // 监听 ASR 识别结果
     asrUnlisten = await listen<AsrResultEvent>('voice:asr_result', (event) => {
       lastRecognized.value = event.payload.text;

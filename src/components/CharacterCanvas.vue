@@ -56,10 +56,23 @@ let isTtsSpeaking = false;
 /** TTS 模拟口型的时间累加器 */
 let ttsMouthTime = 0;
 
+/** 思考状态动画时间累加器 */
+let thinkingTime = 0;
+/** 上一次思考眨眼触发时间 */
+let lastThinkingBlink = 0;
+/** 当前是否处于思考状态 */
+let isThinking = false;
+
 // Watch emotion prop from parent and forward to EmotionEngine
 watch(() => props.emotion, (newEmotion) => {
   if (newEmotion) {
+    isThinking = newEmotion === 'thinking';
+    if (!isThinking) thinkingTime = 0;
     emotionEngine.setEmotion(newEmotion as Emotion);
+    // 平滑过渡：触发 0.5s 的 eased 表情过渡
+    if (expressionModule?.isActive()) {
+      expressionModule.releaseManualOverride(0.5);
+    }
   }
 });
 
@@ -92,6 +105,23 @@ onMounted(async () => {
         eyeTrackModule.start();
         idleAnimation.start();
 
+        // 注册调试热键：Ctrl+1~8 手动触发表情
+        const EXPR_MAP: Record<string, string> = {
+          '1': 'happy', '2': 'sad', '3': 'angry', '4': 'surprised',
+          '5': 'laugh', '6': 'shy', '7': 'upset', '8': 'neutral',
+        };
+        const hotkeyHandler = (e: KeyboardEvent) => {
+          if (!e.ctrlKey && !e.metaKey) return;
+          const expr = EXPR_MAP[e.key];
+          if (!expr) return;
+          e.preventDefault();
+          if (expressionModule?.isActive()) {
+            expressionModule.setExpression(expr, 1.0);
+          }
+        };
+        window.addEventListener('keydown', hotkeyHandler);
+        (window as any).__fairyfield_hotkey_handler = hotkeyHandler;
+
         // 监听 Tauri 事件：情绪状态更新（由 soul Agent 发送）
         emotionUnlisten = await listen<EmotionWeights>('emotion-update', (event) => {
             emotionEngine.setWeights(event.payload);
@@ -117,6 +147,10 @@ onMounted(async () => {
 
         // 点击策略：角色上拖动窗口，透明区域短暂穿透
         const handleMouseDown = (e: MouseEvent): void => {
+            const target = e.target as Element | null;
+            if (target?.closest('button,input,textarea,select,[role="dialog"],.chat-panel,.control-panel')) {
+                return;
+            }
             const hit = hitTestModule?.isHit(e.clientX, e.clientY) ?? false;
             if (hit) {
                 // 命中角色 → 拖动窗口
@@ -131,7 +165,7 @@ onMounted(async () => {
         };
 
         mouseDownHandler = handleMouseDown;
-        window.addEventListener('mousedown', handleMouseDown);
+        canvasRef.value.addEventListener('mousedown', handleMouseDown);
 
         // 模块 tick 循环
         let lastTime = performance.now();
@@ -168,6 +202,19 @@ onMounted(async () => {
 
             // ExpressionModule tick（情绪驱动表情 + 手动过渡）
             expressionModule?.tick(delta);
+
+            // 思考姿势：眨眼动画 + 轻微低头
+            if (isThinking) {
+              thinkingTime += delta;
+              const blinkInterval = 3.5 + 2.0 * Math.sin(thinkingTime * 0.3);
+              if (thinkingTime - lastThinkingBlink > blinkInterval) {
+                lastThinkingBlink = thinkingTime;
+                expressionModule?.setExpression('blink', 0.25);
+              }
+              // 轻微低头（思考时 10% 的 lookdown blend）
+              const lookdownWeight = 0.08 + 0.02 * Math.sin(thinkingTime * 0.5);
+              rendererInstance?.setExpression('lookdown', lookdownWeight);
+            }
 
             // IdleAnimation 和 EyeTrack
             idleAnimation?.tick(delta);
@@ -208,7 +255,7 @@ onUnmounted(() => {
     expressionModule?.stop();
 
     // 移除鼠标事件
-    if (mouseDownHandler) window.removeEventListener('mousedown', mouseDownHandler);
+    if (mouseDownHandler) canvasRef.value?.removeEventListener('mousedown', mouseDownHandler);
 
     rendererInstance?.dispose();
 
@@ -223,6 +270,9 @@ onUnmounted(() => {
     pcmUnlisten = null;
     ttsStartUnlisten = null;
     ttsFinishUnlisten = null;
+
+    const hh = (window as any).__fairyfield_hotkey_handler;
+    if (hh) window.removeEventListener('keydown', hh);
 });
 
 function getRenderer(): VRMRenderer | null {

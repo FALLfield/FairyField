@@ -17,7 +17,7 @@ pub enum MinedMemory {
 
 /// 对话记忆挖掘器
 pub struct ConversationMiner {
-    store: MemoryStore,
+    pub(crate) store: MemoryStore,
 }
 
 impl ConversationMiner {

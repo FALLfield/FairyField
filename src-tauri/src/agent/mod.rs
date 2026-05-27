@@ -7,6 +7,7 @@
 //! - 工具执行 Agent（tool_agent）
 //! - 可组合工具集（toolset）
 
+pub mod coding_agent;
 pub mod compressor;
 pub mod delegation;
 pub mod primary;

@@ -3,7 +3,8 @@
 //! web_search 和 web_fetch 工具。
 //! 使用 DuckDuckGo Instant Answer API 进行搜索，reqwest 直接获取网页内容。
 
-use super::executor::{Tool, ToolError};
+use crate::tools::executor::{Tool, ToolError};
+use regex_lite::Regex;
 use serde::Deserialize;
 use std::pin::Pin;
 use std::time::Duration;
@@ -56,23 +57,44 @@ impl Tool for WebSearchTool {
                 .build()
                 .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
-            // 使用 DuckDuckGo Instant Answer API
-            let query_encoded = params.query.replace(' ', "+");
-            let url = format!(
-                "https://api.duckduckgo.com/?q={}&format=json&no_html=1&skip_disambig=1",
-                query_encoded
-            );
+            // 优先使用 DuckDuckGo Instant Answer API；如果它没有通用网页结果，
+            // 再回退到 DuckDuckGo Lite HTML 搜索页。
+            let mut url = reqwest::Url::parse("https://api.duckduckgo.com/")
+                .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
+            url.query_pairs_mut()
+                .append_pair("q", &params.query)
+                .append_pair("format", "json")
+                .append_pair("no_html", "1")
+                .append_pair("skip_disambig", "1");
 
-            let response = client
-                .get(&url)
-                .send()
-                .await
-                .map_err(|e| ToolError::ExecutionFailed(format!("搜索请求失败: {}", e)))?;
-
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| ToolError::ExecutionFailed(format!("解析搜索结果失败: {}", e)))?;
+            let response = client.get(url).send().await;
+            let json: serde_json::Value = match response {
+                Ok(resp) => match resp.json().await {
+                    Ok(json) => json,
+                    Err(e) => {
+                        if let Some(lite) =
+                            try_duckduckgo_lite_search(&client, &params.query, params.limit).await
+                        {
+                            return Ok(lite);
+                        }
+                        return Err(ToolError::ExecutionFailed(format!(
+                            "解析搜索结果失败: {}",
+                            e
+                        )));
+                    }
+                },
+                Err(e) => {
+                    if let Some(lite) =
+                        try_duckduckgo_lite_search(&client, &params.query, params.limit).await
+                    {
+                        return Ok(lite);
+                    }
+                    return Ok(search_fallback_links(
+                        &params.query,
+                        Some(&format!("DuckDuckGo 搜索不可用（网络限制: {}）", e)),
+                    ));
+                }
+            };
 
             let mut results = Vec::new();
 
@@ -120,6 +142,14 @@ impl Tool for WebSearchTool {
 
             // 如果 DuckDuckGo 没有返回结果，尝试 wttr.in（天气专用）
             if results.is_empty() {
+                if let Some(lite) =
+                    try_duckduckgo_lite_search(&client, &params.query, params.limit).await
+                {
+                    results.push(lite);
+                }
+            }
+
+            if results.is_empty() {
                 let weather_result = try_weather_search(&client, &params.query).await;
                 if let Some(weather) = weather_result {
                     results.push(weather);
@@ -127,15 +157,160 @@ impl Tool for WebSearchTool {
             }
 
             if results.is_empty() {
-                Ok(format!(
-                    "未找到「{}」的相关搜索结果。建议尝试其他关键词。",
-                    params.query
-                ))
+                Ok(search_fallback_links(&params.query, None))
             } else {
                 Ok(results.join("\n\n"))
             }
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SearchResult {
+    title: String,
+    url: String,
+    snippet: String,
+}
+
+async fn try_duckduckgo_lite_search(
+    client: &reqwest::Client,
+    query: &str,
+    limit: u32,
+) -> Option<String> {
+    let mut url = reqwest::Url::parse("https://lite.duckduckgo.com/lite/").ok()?;
+    url.query_pairs_mut().append_pair("q", query);
+
+    let html = client.get(url).send().await.ok()?.text().await.ok()?;
+    let results = parse_duckduckgo_lite_results(&html, limit as usize);
+    if results.is_empty() {
+        return None;
+    }
+
+    let formatted = results
+        .iter()
+        .enumerate()
+        .map(|(i, result)| {
+            if result.snippet.is_empty() {
+                format!("{}. {}\n{}", i + 1, result.title, result.url)
+            } else {
+                format!(
+                    "{}. {}\n{}\n{}",
+                    i + 1,
+                    result.title,
+                    result.url,
+                    result.snippet
+                )
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    Some(format!("🔎 搜索结果（DuckDuckGo Lite）\n\n{}", formatted))
+}
+
+fn parse_duckduckgo_lite_results(html: &str, limit: usize) -> Vec<SearchResult> {
+    let anchor_re =
+        Regex::new(r#"(?is)<a\b[^>]*class=["'][^"']*result-link[^"']*["'][^>]*>(.*?)</a>"#)
+            .expect("valid result-link regex");
+    let href_re = Regex::new(r#"(?is)href=["']([^"']+)["']"#).expect("valid href regex");
+    let snippet_re =
+        Regex::new(r#"(?is)<td\b[^>]*class=["'][^"']*result-snippet[^"']*["'][^>]*>(.*?)</td>"#)
+            .expect("valid snippet regex");
+
+    let snippets = snippet_re
+        .captures_iter(html)
+        .filter_map(|cap| cap.get(1).map(|m| html_to_text(m.as_str())))
+        .collect::<Vec<_>>();
+
+    let mut results = Vec::new();
+    for (index, cap) in anchor_re.captures_iter(html).enumerate() {
+        if results.len() >= limit {
+            break;
+        }
+        let anchor_html = match cap.get(0) {
+            Some(m) => m.as_str(),
+            None => continue,
+        };
+        let href = match href_re
+            .captures(anchor_html)
+            .and_then(|href_cap| href_cap.get(1))
+        {
+            Some(m) => normalize_duckduckgo_url(m.as_str()),
+            None => continue,
+        };
+        let title = cap
+            .get(1)
+            .map(|m| html_to_text(m.as_str()))
+            .unwrap_or_default();
+        if title.is_empty() || href.is_empty() {
+            continue;
+        }
+
+        results.push(SearchResult {
+            title,
+            url: href,
+            snippet: snippets.get(index).cloned().unwrap_or_default(),
+        });
+    }
+
+    results
+}
+
+fn normalize_duckduckgo_url(raw_href: &str) -> String {
+    let decoded = decode_html_entities(raw_href);
+    let candidate = if decoded.starts_with("//") {
+        format!("https:{}", decoded)
+    } else if decoded.starts_with('/') {
+        format!("https://duckduckgo.com{}", decoded)
+    } else {
+        decoded
+    };
+
+    if let Ok(url) = reqwest::Url::parse(&candidate) {
+        if let Some((_, uddg)) = url.query_pairs().find(|(key, _)| key == "uddg") {
+            return uddg.into_owned();
+        }
+        return url.to_string();
+    }
+
+    candidate
+}
+
+fn html_to_text(html: &str) -> String {
+    decode_html_entities(&strip_html_tags(html))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn decode_html_entities(text: &str) -> String {
+    text.replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
+}
+
+fn encoded_query_component(query: &str) -> String {
+    let mut url = reqwest::Url::parse("https://example.com/").expect("valid base url");
+    url.query_pairs_mut().append_pair("q", query);
+    url.query()
+        .and_then(|q| q.strip_prefix("q="))
+        .unwrap_or("")
+        .to_string()
+}
+
+fn search_fallback_links(query: &str, reason: Option<&str>) -> String {
+    let encoded = encoded_query_component(query);
+    let prefix = reason
+        .map(|r| format!("⚠️ {}。\n\n", r))
+        .unwrap_or_else(|| format!("未找到「{}」的即时搜索结果。\n\n", query));
+    format!(
+        "{}你可以通过以下链接继续搜索：\n• Google: https://www.google.com/search?q={}\n• Bing: https://www.bing.com/search?q={}\n• 百度: https://www.baidu.com/s?wd={}",
+        prefix, encoded, encoded, encoded
+    )
 }
 
 /// 尝试通过 wttr.in 获取天气信息
@@ -189,9 +364,25 @@ async fn try_weather_search(client: &reqwest::Client, query: &str) -> Option<Str
 fn extract_city(query: &str) -> Option<String> {
     // 移除天气相关关键词，提取城市名
     let weather_words = [
-        "天气", "weather", "气温", "温度", "怎么样", "如何", "如何了",
-        "下雨", "晴", "阴", "多云", "的", "今天", "明天", "后天",
-        "现在", "请问", "查一下", "看看",
+        "天气",
+        "weather",
+        "气温",
+        "温度",
+        "怎么样",
+        "如何",
+        "如何了",
+        "下雨",
+        "晴",
+        "阴",
+        "多云",
+        "的",
+        "今天",
+        "明天",
+        "后天",
+        "现在",
+        "请问",
+        "查一下",
+        "看看",
     ];
 
     let mut city = query.to_string();
@@ -309,7 +500,11 @@ impl Tool for WebFetchTool {
 
             // 截断到合理大小
             let truncated = if cleaned.len() > 5000 {
-                format!("{}...\n\n[内容已截断，原始长度: {} 字符]", &cleaned[..5000], cleaned.len())
+                format!(
+                    "{}...\n\n[内容已截断，原始长度: {} 字符]",
+                    &cleaned[..5000],
+                    cleaned.len()
+                )
             } else {
                 cleaned
             };
@@ -405,6 +600,22 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn execute_search_known_query_returns_usable_output() {
+        let tool = WebSearchTool;
+        let result = tool
+            .execute(r#"{"query": "Rust programming language", "limit": 3}"#)
+            .await
+            .unwrap();
+        println!("web_search smoke output:\n{}", result);
+        assert!(!result.contains("web_search mock"));
+        assert!(!result.contains("未找到「Rust programming language」"));
+        assert!(
+            result.contains("Rust") || result.contains("搜索结果"),
+            "unexpected search output: {result}"
+        );
+    }
+
     #[test]
     fn validate_fetch_input() {
         let tool = WebFetchTool;
@@ -439,7 +650,8 @@ mod tests {
 
     #[test]
     fn test_strip_html_skips_script() {
-        let html = "<html><body><script>var x = 1; alert('hi');</script><p>Visible</p></body></html>";
+        let html =
+            "<html><body><script>var x = 1; alert('hi');</script><p>Visible</p></body></html>";
         let text = strip_html_tags(html);
         assert!(text.contains("Visible"));
         assert!(!text.contains("alert"));
@@ -452,5 +664,26 @@ mod tests {
         let text = strip_html_tags(html);
         assert!(text.contains("Content"));
         assert!(!text.contains("color"));
+    }
+
+    #[test]
+    fn parse_duckduckgo_lite_results_extracts_links_and_snippets() {
+        let html = r#"
+            <a rel="nofollow" class='result-link' href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ffairy%3Fa%3D1%26b%3D2">Fairy &amp; Field</a>
+            <td class='result-snippet'>A <b>desktop</b> companion.</td>
+        "#;
+
+        let results = parse_duckduckgo_lite_results(html, 5);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Fairy & Field");
+        assert_eq!(results[0].url, "https://example.com/fairy?a=1&b=2");
+        assert_eq!(results[0].snippet, "A desktop companion.");
+    }
+
+    #[test]
+    fn fallback_links_percent_encode_chinese_queries() {
+        let links = search_fallback_links("澳门 天气", None);
+        assert!(links.contains("%E6%BE%B3%E9%97%A8+%E5%A4%A9%E6%B0%94"));
+        assert!(!links.contains("q=澳门"));
     }
 }

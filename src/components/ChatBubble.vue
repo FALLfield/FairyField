@@ -8,12 +8,14 @@ interface ChatBubbleProps {
   emotion?: Emotion;
   isLoading?: boolean;
   timestamp?: number;
+  grouped?: boolean;
 }
 
 const props = withDefaults(defineProps<ChatBubbleProps>(), {
   emotion: 'neutral',
   isLoading: false,
   timestamp: undefined,
+  grouped: false,
 });
 
 /** 情绪对应的 AI 气泡背景色 */
@@ -109,7 +111,7 @@ const relativeTime = computed<string>(() => {
         <p class="bubble-text">{{ message }}</p>
       </div>
       <time
-        v-if="relativeTime"
+        v-if="relativeTime && !grouped"
         class="bubble-time"
         :datetime="new Date(timestamp!).toISOString()"
       >

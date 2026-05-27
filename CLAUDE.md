@@ -29,114 +29,49 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 
 **零 Python 依赖。** 整个技术栈是 Rust + TypeScript。
 
-**完整技术方案和架构设计见 `PROPOSAL.md`。**
+**当前仓库内的架构说明以 `README.md`、`ARCHITECTURE.md`、`PROJECT_STRUCTURE.md`、`docs/USAGE_GUIDE.md` 和源码模块为准。**
 
-## Current Phase: Phase 4.5 完成 → Phase 5 部分完成（待人工验证）
+## Current Phase: v1.0.0 发布候选 ✅ Phase 6 完成
 
-### Phase 3 全部完成 (2026-04-25)
+### Release State (2026-05-26)
 
-**Wave 1 ✅ 已完成（2026-04-23）：** 工具系统、记忆存储、安全防护、子 Agent 委派（172/172 测试通过）
+- ✅ Phase 0-5 已完成：桌面容器、3D 角色、语音管道、记忆、Agent Loop、MVP 发布资料。
+- ✅ Phase 6 已完成：UI 分层、工具系统、用户引导、Coding Agent、MCP 双向集成、社区插件和共享记忆后端。
+- ✅ 版本已统一到 `1.0.0`：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
+- ✅ 默认模型路径指向仓库内可用资源：`public/models/default/2031903848872972007.glb`。
+- ✅ 自动化测试：369 Rust + 97 Frontend = 466 tests passed。
+- ✅ 发布前验证命令：`npm run build`、`npm run test`、`cargo check`、`cargo test`、`cargo clippy -- -D warnings`、`cargo fmt --check`。
 
-**Wave 2 ✅ 已完成（2026-04-25）：**
-- ✅ 前端记忆/工具/安全 IPC 替换 mock 为真实调用
-- ✅ 知识图谱 IPC 命令（kg_add_fact, kg_invalidate, kg_query_entity, kg_query_relation, kg_search）
-- ✅ 向量搜索 IPC 命令（memory_vector_search）
-- ✅ Gateway 基础模块（Discord Bot stub + Cron 调度器 + 命令）
-- ✅ Growth 基础模块（成长引擎 + 技能管理）
-- ✅ LLM 智能路由（routing.rs）
+### Phase 6 完成项
 
-**Wave 3 ✅ 已完成（2026-04-25）：**
-- ✅ 知识图谱（时序三元组 + valid_from/to + 失效标记）
-- ✅ 向量搜索（sqlite-vec + ONNX embedding）
-- ✅ 234/234 Rust 测试通过，93/93 前端测试通过，frontend build 通过
+| 领域 | 状态 | 说明 |
+|---|---|---|
+| UI 优化 | ✅ | ControlPanel 左上角折叠；ChatPanel 纯对话；表情由全局情绪状态驱动；聊天点击不再被画布抢占。 |
+| 用户引导 | ✅ | 4 步 onboarding：名字、称呼偏好、性格、LLM 配置；配置保存到 `~/.fairyfield/user.json`。 |
+| 配置与密钥 | ✅ | API key 写入 `~/.fairyfield/secrets.json`，前端读取配置时自动脱敏。 |
+| 工具系统 | ✅ | ToolManifest、权限、Token 压缩、MCP 传输、OAuth、Composio、社区插件、内置工具集合。 |
+| Coding Agent | ✅ | Codex/KiloCode/OpenCode CLI 子进程管理，cwd/context 校验、超时、输出上限和权限白名单。 |
+| MCP Server | ✅ | 暴露 `fairy.execute_tool`、`fairy.get_context`、记忆搜索、wake-up、profile 等能力。 |
+| 共享记忆 | ✅ | `AgentMemoryBackend` 为外部 coding agents 提供上下文检索、去重写入和 diary 接口。 |
+| 发布文档 | ✅ | README、CHANGELOG、CONTRIBUTING、USAGE_GUIDE 更新到 v1.0.0。 |
 
-**Agent Loop ✅ 已完成（2026-04-25）：** 自主工具调用 + 记忆集成
-- ✅ LLM Function Calling（OpenAI tool_use / Claude function_calling）
-- ✅ Memory Tool Integration（MemorySearchTool/MemorySaveTool 真实记忆层）
-- ✅ Agent Loop（ReAct 循环 max 5 rounds + 记忆注入 + 工具执行）
-- ✅ Frontend DevMode（Ctrl+Shift+D 切换开发面板，AgentStatusBadge + AgentLogPanel）
+### 已修复关键风险
 
-### Phase 4 完成 (2026-04-28, 244 Rust + 93 Frontend 测试通过)
-- ✅ Growth Engine（growth/engine.rs + skill.rs + growth/commands.rs，9 IPC 命令）
-- ✅ Gateway（gateway/discord.rs + cron.rs + commands.rs，Webhook + CronScheduler）
-- ✅ LLM Routing（llm/routing.rs，复杂度分类 Fast/Balanced/Powerful）
-- ✅ MCP Server（mcp/server.rs，4 工具：memory_search/wake_up/recall_wing/get_user_profile）
-- ✅ Prompt Caching（llm/caching.rs，System+3 策略，缓存命中统计）
-- ✅ 端到端集成验证（244 Rust 测试 + 93 前端测试 + build 通过）
+- ✅ `fairy.execute_tool` 不再是 stub，改为通过共享 `ToolExecutor` 执行真实工具。
+- ✅ `llm_save_api_key` 不再把密钥写入公开配置；API key 由 secret store 管理。
+- ✅ Onboarding 不再只依赖 localStorage；Tauri 环境使用后端用户配置持久化。
+- ✅ `CharacterCanvas` 仅监听画布自身点击，避免抢占聊天输入和面板交互。
+- ✅ ChatHistory 用户消息右对齐，连续消息分组布局正确。
+- ✅ Coding Agent 子进程支持超时终止、输出限制和路径校验。
+- ✅ Tool registry 使用 memory-aware registry，工具执行路径与 Agent Loop/MCP 共享。
 
-### Phase 4.5 收尾 ✅ 已完成（2026-05-07，248 Rust + 93 Frontend）
-1. ✅ **前端流式回复** — useAgent.ts 改用 agentChatStream，监听 agent:stream-token/done 事件
-2. ✅ **System prompt 增强** — SOUL.md 新增"工具使用"章节，定义何时使用工具/记忆搜索
-3. ✅ **中文 FTS5** — 集成 jieba-rs 0.7，MemoryStore 自动分词中文查询和索引
-4. ✅ **前端代码拆分** — vite.config.ts manualChunks: vendor(70KB)/three(520KB)/three-vrm(146KB)/index(86KB)
-5. ✅ **插件系统** — PluginLoader 实现（JSON 动态加载，4 测试），plugins/example.json 示例
-6. ✅ **Chat UI 增强** — ChatBubble 情绪颜色 + 打字动画 + 无障碍
-7. ✅ **Kokoro TTS stub** — KokoroTts 结构体完整，需模型文件；MacSayTts 仍为默认
-8. ✅ **ASR/VAD stub** — SherpaOnnxAsr/SileroVad 定义，含降级回退和模型下载指引
+### 待后续（Phase 7+）
 
-### 已修复 Bug (2026-04-27)
-1. ✅ **agent:status 事件从未发出** — PrimaryAgent.app_handle 修复
-2. ✅ **对话记忆挖掘空操作** — mine_conversation 完整流程实现
-3. ✅ **strip_html_tags 泄漏 script/style** — 标签名跟踪修复
-
-### 已修复 Bug (2026-05-09) — 人工测试反馈修复
-1. ✅ **`[emotion:xxx]` 标签泄漏到聊天** — chat_stream 改为先 parse_emotion_tag 再流式发送 cleaned_reply
-2. ✅ **ControlPanel LLM 提供商不显示** — 增加错误处理和重试按钮，provider section 始终可见
-3. ✅ **SherpaOnnxAsr/SileroVad stub 缺失** — 新增带文档注释和降级回退的 stub 实现
-
-### 人工测试结果 (2026-05-09)
-
-| # | 测试项 | 状态 | 备注 |
-|---|--------|------|------|
-| 1 | 流式聊天回复 | ✅ 已修复 | emotion tag 泄漏和 thinking 持续 bug 已修复 |
-| 2 | System Prompt 工具指引 | ✅ 通过 | SOUL.md 含完整工具使用章节 |
-| 3 | 中文 FTS5 分词 | ✅ 通过 | jieba-rs 0.7 集成，编译和搜索正常 |
-| 4 | 前端代码拆分 | ✅ 通过 | vendor/three/three-vrm/index 4 chunk 构建 |
-| 5 | 插件系统 | ✅ 通过 | PluginLoader 4 测试通过 |
-| 6 | Discord 网关 | ✅ 通过 | gateway 6 测试通过 |
-| 7 | 语音管道 | ✅ 已补全 | MacSayTts+KokoroTts+SherpaOnnxAsr+SileroVad stubs 完整 |
-| 8 | 情绪系统 | ✅ 通过 | 情绪切换 + 自然衰减正常 |
-| 9 | LLM 提供商切换 | ✅ 已修复 | ControlPanel 错误处理增强，重试功能 |
-| 10 | 记忆系统 | ✅ 通过 | 多轮对话后可回忆相关内容 |
-| 11 | 安全系统 | ✅ 通过 | 注入检测 + 密钥脱敏正常 |
-| -- | --- | -- | -- |
-| A | `npm run build` | ✅ 通过 | 5 chunk 构建无错误 |
-| B | `npm run test` | ✅ 通过 | 93 tests passed |
-| C | `cargo check` | ✅ 通过 | 无 error（16 warnings） |
-| D | `cargo test` | ✅ 通过 | 248 tests passed |
-
-### Phase 5：MVP 发布（进行中）
-
-**MVP 目标：** 真实语音引擎 + 语音输入 UI + 开源发布
-
-**进行中 (2026-05-09)：**
-
-| # | 任务 | 状态 | 涉及文件 |
-|---|------|------|----------|
-| 1 | 真实 Kokoro TTS 引擎 | 🔄 实现中 | `src-tauri/src/voice/tts.rs` — sherpa-onnx OfflineTts API |
-| 2 | 真实 Paraformer ASR 引擎 | 🔄 实现中 | `src-tauri/src/voice/asr.rs` — OnlineRecognizer |
-| 3 | 真实 Silero VAD 引擎 | 🔄 实现中 | `src-tauri/src/voice/vad.rs` — VoiceActivityDetector |
-| 4 | AudioInput 麦克风捕获 | 🔄 实现中 | `src-tauri/src/voice/audio_input.rs` — cpal input stream |
-| 5 | 模型下载脚本 | ✅ 已完成 | `scripts/download-models.sh` |
-| 6 | Chat UI 重设计 + STT | 🔄 实现中 | ChatPanel 麦克风按钮 + 录音 UI + App.vue 接线 |
-| 7 | Discord 使用指南 | ✅ 已完成 | `docs/DISCORD_SETUP.md` |
-| 8 | 用户指南 | ✅ 已完成 | `docs/USAGE_GUIDE.md` |
-| 9 | GitHub 开源发布 | 🔄 实现中 | README + LICENSE + CONTRIBUTING + .gitignore |
-| 10 | macOS 麦克风权限 | 🔄 实现中 | `tauri.conf.json` Info.plist 配置 |
-
-### 待后续（Phase 5+，按优先级）
-1. **全息模式** — 透视追踪（MediaPipe Face Mesh），当前延后
-2. **Discord Bot 完整集成** — 替换 Webhook stub 为 serenity Bot（需 Bot Token）
-3. **Three.js 懒加载** — 动态 import 降低首屏加载
-4. **npm run tauri dev 端到端** — 完整桌面验证
-5. **数据采集模块** — 交互日志、延迟测量
-6. **更多通信平台** — 微信 Server酱、邮件 SMTP
-
-### 下一步指令
-1. 等待 voice engine + Chat UI agent 完成实现
-2. `cargo check && cargo test && npm run build && npm run test` — 全部验证
-3. `npm run tauri dev` — 完整端到端启动验证
-4. git commit 所有变更并推送 GitHub
+1. **全息模式** — 透视追踪（MediaPipe Face Mesh）和真实硬件适配。
+2. **Discord Bot 完整集成** — serenity Bot Token 配置、手机端交互闭环。
+3. **更多第三方服务深集成** — Notion/Gmail/Calendar/Linear/Slack 的真实 OAuth API 测试。
+4. **桌面端人工验收** — `npm run tauri dev` 下麦克风权限、透明窗口、置顶和模型交互完整验收。
+5. **发布流水线扩展** — macOS 签名、公证、安装包产物和 GitHub Release 自动化。
 
 ## Development Phases
 
@@ -146,7 +81,9 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 - **Phase 3**：智能系统 ✅ 已完成（Wave 1/2/3 + Agent Loop，248 测试通过）
 - **Phase 4**：成长 + 通信 ✅ 已完成（2026-04-28，248+93 测试通过）
 - **Phase 4.5**：收尾 ✅ 已完成（2026-05-07）— 流式回复/jieba分词/代码拆分/插件系统/ChatUI
-- **Phase 5**：完善 + 研究准备 — 全息模式延后，其余项基本完成
+- **Phase 5**：MVP 发布 ✅ 已完成（2026-05-15）
+- **Phase 6**：UI 优化 + 工具系统 + 用户引导 + Coding Agent 集成 ✅ 已完成（2026-05-26）
+- **Phase 7**：全息模式 + 移动通信 + 发布流水线强化（后续）
 
 ## Commands
 
@@ -345,7 +282,7 @@ platform:save_config(config: Config) → ()
 - 集成时合并到主开发分支
 - 如果改动不冲突且文件不重叠，可在同一分支并行
 
-## Architecture (Target — See PROPOSAL.md §8 for details)
+## Architecture (v1.0.0)
 
 ```
 Frontend (Vue 3 + Three.js + @pixiv/three-vrm)
@@ -368,16 +305,16 @@ Backend (Rust / Tauri v2)
   │   ├── provider.rs       #   多提供商适配 (OpenAI/Claude) + Function Calling
   │   ├── streaming.rs      #   SSE 流式处理
   │   └── caching.rs        #   Prompt Caching (Anthropic 优化)
-  ├── tools/                # 工具系统 (自注册)
+  ├── tools/                # 工具系统 (135+ surface)
   │   ├── registry.rs       #   Trait-based 零耦合注册 + memory-aware 构造
   │   ├── executor.rs       #   工具执行器 (Send-safe async)
   │   ├── coerce.rs         #   参数类型修正 (LLM 输出容错)
-  │   ├── web.rs            #   web_search, web_fetch (⚠️ MOCK)
-  │   ├── file_ops.rs       #   read_file, write_file, search_files
-  │   ├── terminal.rs       #   终端命令 (白名单)
-  │   ├── git.rs            #   Git 操作
-  │   ├── memory_tool.rs    #   记忆检索/写入 (真实 MemoryLayers)
-  │   └── communication.rs  #   跨平台消息
+  │   ├── manifest.rs       #   声明式工具描述
+  │   ├── permissions.rs    #   工具权限模型
+  │   ├── compressor.rs     #   Token 压缩
+  │   ├── builtins/         #   内置工具 (web/file/shell/git/github/notion/gmail/...)
+  │   ├── mcp/              #   MCP transport/OAuth/Composio/rate limit
+  │   └── community/        #   JSON 社区插件加载器
   ├── voice/                # 语音管道 (sherpa-onnx)
   │   ├── asr.rs            #   Paraformer 语音识别
   │   ├── tts.rs            #   Kokoro 语音合成
@@ -396,8 +333,8 @@ Backend (Rust / Tauri v2)
   ├── gateway/              # 通信网关
   │   ├── discord.rs       #   Discord Bot (手机伴侣)
   │   └── cron.rs           #   定时任务 (关心/提醒)
-  ├── mcp/                  # Claude Code 集成
-  │   └── server.rs         #   MCP Server (记忆+工具暴露)
+  ├── mcp/                  # Coding Agent 集成
+  │   └── server.rs         #   MCP Server (记忆+工具暴露+execute_tool)
   ├── security/             # 安全体系
   │   ├── injection.rs      #   Prompt Injection 防护
   │   ├── guard.rs          #   命令守卫 (dangerous/caution/safe)
@@ -424,22 +361,24 @@ Backend (Rust / Tauri v2)
 
 ## Key Files
 
-- `PROPOSAL.md` — 技术方案（选型、架构、开发计划、参考代码库索引）
-- `HERMES_TECHNICAL_ANALYSIS.md` — Hermes Agent 技术分析报告
-- `MEMORY_TECHNICAL_ANALYSIS.md` — MemPalace 长期记忆系统技术拆解
-- `.kiro/specs/desktop-anime-agent/requirements.md` — 需求规格（15 条需求，中文）
-- `.kiro/specs/desktop-anime-agent/design.md` — 原设计文档（中文）
+- `README.md` — 项目介绍、快速开始和发布状态
+- `ARCHITECTURE.md` — v1 架构说明
+- `PROJECT_STRUCTURE.md` — 目录和模块索引
+- `CHANGELOG.md` — 发布记录
+- `docs/USAGE_GUIDE.md` — 用户使用指南
+- `docs/DISCORD_SETUP.md` — Discord 网关配置
 - `src-tauri/tauri.conf.json` — Tauri 窗口配置
 - `soul/SOUL.md` — Fairy 的性格、价值观、说话风格（Phase 2 创建）
 - `soul/identity.txt` — L0 身份描述（~100 tokens，每次 wake-up 加载）
 
-## Mandatory: Phase 完成后必须更新 PROPOSAL.md
+## Mandatory: Phase 完成后必须更新发布文档
 
-每当一个 Phase 的开发工作完成并验证通过后，**必须**立即更新 PROPOSAL.md 中 §9 对应的 Phase 章节：
-- 将 `- [ ]` 改为 `- [x]`
-- 在 Phase 标题后添加 `✅ 已完成`
-- 更新 `Current Phase` 为下一个 Phase
-- 更新 memory/phase0_status.md
+每当一个 Phase 的开发工作完成并验证通过后，**必须**立即更新仓库内发布文档：
+- `README.md` 的 Current Status / Test Coverage
+- `CHANGELOG.md` 的版本条目
+- `CLAUDE.md` 的 Current Phase
+- `docs/USAGE_GUIDE.md` 的阶段状态
+- 如果父级 workspace 存在 `PROPOSAL.md` / `docs/PHASE6_PLAN.md`，也要同步对应 Phase 状态
 
 **Why:** 用户多次指出此步骤被遗漏。这是非可选的工作流要求。
 
@@ -448,8 +387,8 @@ Backend (Rust / Tauri v2)
 **在实现任何新功能之前**（不只是遇到问题时），**必须先检查** Hermes Agent 和 MemPalace 是否已有类似实现。如果有，参考其设计模式再动手写代码。
 
 **检查流程：**
-1. 查 `HERMES_TECHNICAL_ANALYSIS.md` 或 `MEMORY_TECHNICAL_ANALYSIS.md` 的相关章节
-2. 查 `graphify-out/GRAPH_REPORT.md` 的 god nodes 和 community 结构
+1. 若父级 workspace 存在参考文档，查 `HERMES_TECHNICAL_ANALYSIS.md` 或 `MEMORY_TECHNICAL_ANALYSIS.md` 的相关章节
+2. 若参考项目存在 graphify 输出，查 `graphify-out/GRAPH_REPORT.md` 的 god nodes 和 community 结构
 3. 直接读源码中的关键文件
 
 **参考项目索引：**

@@ -1,18 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import type { ExpressionModule } from '../modules/ExpressionModule';
 import * as tauriCommands from '../lib/tauri-commands';
 import type { ProviderPreset } from '../lib/tauri-commands';
 
 interface ControlPanelProps {
   fps: number;
   modelLoaded: boolean;
-  expressionModule: ExpressionModule | null;
 }
 
-const props = defineProps<ControlPanelProps>();
+defineProps<ControlPanelProps>();
 
-const collapsed = ref(false);
+const collapsed = ref(true);
 const providers = ref<ProviderPreset[]>([]);
 const activeProvider = ref<string>('');
 const switching = ref(false);
@@ -20,12 +18,6 @@ const loadError = ref<string | null>(null);
 
 function toggleCollapse(): void {
   collapsed.value = !collapsed.value;
-}
-
-function triggerExpression(name: string): void {
-  if (props.expressionModule) {
-    props.expressionModule.setExpression(name, 1.0);
-  }
 }
 
 async function loadProviders(): Promise<void> {
@@ -96,21 +88,6 @@ onMounted(() => {
         </span>
       </div>
 
-      <!-- 表情控制 -->
-      <div v-if="modelLoaded" class="section">
-        <span class="label">表情</span>
-        <div class="expr-buttons">
-          <button @click="triggerExpression('happy')">开心</button>
-          <button @click="triggerExpression('sad')">难过</button>
-          <button @click="triggerExpression('angry')">生气</button>
-          <button @click="triggerExpression('surprised')">惊讶</button>
-          <button @click="triggerExpression('laugh')">笑</button>
-          <button @click="triggerExpression('shy')">害羞</button>
-          <button @click="triggerExpression('upset')">不高兴</button>
-          <button @click="triggerExpression('neutral')">平静</button>
-        </div>
-      </div>
-
       <!-- LLM 提供商切换 -->
       <div class="section">
         <span class="label">LLM</span>
@@ -146,9 +123,9 @@ onMounted(() => {
 <style scoped>
 .control-panel {
   position: fixed;
-  bottom: 16px;
-  right: 16px;
-  z-index: 200;
+  top: 16px;
+  left: 16px;
+  z-index: 300;
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -242,27 +219,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.expr-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.expr-buttons button {
-  padding: 3px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #d4d4d4;
-  font-size: 11px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.expr-buttons button:hover {
-  background: rgba(255, 255, 255, 0.15);
 }
 
 .provider-buttons {

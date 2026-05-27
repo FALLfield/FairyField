@@ -2,7 +2,7 @@
 //!
 //! file_read 和 file_write 工具，带路径遍历防护。
 
-use super::executor::{Tool, ToolError};
+use crate::tools::executor::{Tool, ToolError};
 use serde::Deserialize;
 use std::path::Path;
 use std::pin::Pin;

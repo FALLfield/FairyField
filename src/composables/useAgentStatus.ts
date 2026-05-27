@@ -1,5 +1,6 @@
 import { ref, readonly, onMounted, onUnmounted } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { isTauriEnvironment } from '../lib/tauri-commands';
 
 export type AgentStatus = 'idle' | 'thinking' | 'searching_memory' | 'executing_tool';
 
@@ -18,22 +19,33 @@ let unlistenToolLog: UnlistenFn | null = null;
 
 export function useAgentStatus() {
   onMounted(async () => {
+    if (!isTauriEnvironment()) return;
+
     if (!unlistenStatus) {
-      unlistenStatus = await listen<string>('agent:status', (event) => {
-        status.value = event.payload as AgentStatus;
-      });
+      try {
+        unlistenStatus = await listen<string>('agent:status', (event) => {
+          status.value = event.payload as AgentStatus;
+        });
+      } catch (error) {
+        if (import.meta.env.DEV) console.warn('[FairyField] agent status listener unavailable:', error);
+        status.value = 'idle';
+      }
     }
     if (!unlistenToolLog) {
-      unlistenToolLog = await listen<{ tool: string; result: string }>('agent:tool_log', (event) => {
-        toolLog.value = [
-          ...toolLog.value,
-          {
-            tool: event.payload.tool,
-            result: event.payload.result,
-            timestamp: Date.now(),
-          },
-        ];
-      });
+      try {
+        unlistenToolLog = await listen<{ tool: string; result: string }>('agent:tool_log', (event) => {
+          toolLog.value = [
+            ...toolLog.value,
+            {
+              tool: event.payload.tool,
+              result: event.payload.result,
+              timestamp: Date.now(),
+            },
+          ];
+        });
+      } catch (error) {
+        if (import.meta.env.DEV) console.warn('[FairyField] agent tool log listener unavailable:', error);
+      }
     }
   });
 

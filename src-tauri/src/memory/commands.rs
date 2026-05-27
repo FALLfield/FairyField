@@ -213,8 +213,6 @@ pub fn memory_vector_search(
         .search(&query, limit.unwrap_or(5));
     Ok(results
         .into_iter()
-        .map(|(id, score)| {
-            serde_json::json!({ "id": id, "score": score })
-        })
+        .map(|(id, score)| serde_json::json!({ "id": id, "score": score }))
         .collect())
 }

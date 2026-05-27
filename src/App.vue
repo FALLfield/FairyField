@@ -7,10 +7,13 @@ import MemoryPanel from './components/MemoryPanel.vue';
 import ToolsPanel from './components/ToolsPanel.vue';
 import AgentStatusBadge from './components/AgentStatusBadge.vue';
 import AgentLogPanel from './components/AgentLogPanel.vue';
+import OnboardingWizard from './components/OnboardingWizard.vue';
 import { useAgent } from './composables/useAgent';
 import { useVoice } from './composables/useVoice';
 import { useDevMode } from './composables/useDevMode';
 import { useAgentStatus } from './composables/useAgentStatus';
+import { useOnboarding } from './composables/useOnboarding';
+import type { OnboardingData } from './composables/useOnboarding';
 
 const characterCanvasRef = ref<InstanceType<typeof CharacterCanvas> | null>(null);
 const appError = ref<string | null>(null);
@@ -45,6 +48,7 @@ const {
 
 const { devMode, onAvatarTripleClick } = useDevMode();
 const { status: agentStatus, toolLog, resetStatus: resetAgentStatus } = useAgentStatus();
+const { showOnboarding, isLoading: onboardingLoading, completeOnboarding } = useOnboarding();
 
 // --- 录音状态 ---
 const isRecording = ref(false);
@@ -104,10 +108,28 @@ function onModelError(message: string): void {
 function onFps(value: number): void {
   fps.value = value;
 }
+
+/** Handle onboarding wizard completion */
+async function handleOnboardingComplete(data: OnboardingData): Promise<void> {
+  await completeOnboarding(data);
+}
 </script>
 
 <template>
-  <main class="app-root">
+  <!-- 首次启动引导向导 -->
+  <OnboardingWizard
+    v-if="showOnboarding && !onboardingLoading"
+    :show="showOnboarding && !onboardingLoading"
+    @complete="handleOnboardingComplete"
+  />
+
+  <!-- 加载状态 -->
+  <div v-else-if="onboardingLoading" class="app-loading" aria-label="加载中">
+    <div class="loading-spinner" />
+  </div>
+
+  <!-- 主界面 -->
+  <main v-else class="app-root">
     <!-- 全局错误边界提示 -->
     <div v-if="appError" class="status-overlay status-error">
       <p>{{ appError }}</p>
@@ -202,5 +224,31 @@ function onFps(value: number): void {
   pointer-events: none;
   display: flex;
   justify-content: center;
+}
+
+/* 首次加载状态 */
+.app-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 18, 0.95);
+  z-index: 1000;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: rgba(180, 160, 255, 0.7);
+  border-radius: 50%;
+  animation: app-spin 0.7s linear infinite;
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

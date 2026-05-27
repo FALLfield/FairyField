@@ -68,7 +68,10 @@ mod tests {
         let gw = DiscordGateway::new(DiscordConfig {
             webhook_url: "https://discord.com/api/webhooks/test".into(),
         });
-        assert_eq!(gw.config.webhook_url, "https://discord.com/api/webhooks/test");
+        assert_eq!(
+            gw.config.webhook_url,
+            "https://discord.com/api/webhooks/test"
+        );
     }
 
     #[tokio::test]

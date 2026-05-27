@@ -4,7 +4,6 @@
 
 # ---- Dependencies ----
 node_modules/
-package-lock.json
 .pnp/
 .pnp.js
 
@@ -16,7 +15,6 @@ src-tauri/gen/
 target/
 
 # ---- Rust ----
-Cargo.lock
 *.rlib
 
 # ---- Tauri ----
@@ -85,8 +83,12 @@ public/models/**/*.vrm
 
 # ---- sherpa-onnx downloaded models ----
 models/
+!public/models/
+!public/models/default/
+!public/models/default/2031903848872972007.glb
 
 # ---- Agent & MCP runtime state ----
+.codex-backups/
 .omc/
 .ruflo/
 *.rvf
@@ -101,13 +103,6 @@ agentdb/
 .rules/
 .cursorrules
 .copilot/
-
-# ---- Test manual (local only) ----
-TEST_MANUAL.md
-
-# ---- Stray / auto-generated docs ----
-ARCHITECTURE.md
-PROJECT_STRUCTURE.md
 
 # ---- Template boilerplate (not needed) ----
 public/tauri.svg

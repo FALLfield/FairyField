@@ -55,7 +55,8 @@ impl ModelRouter {
     fn classify_by_complexity(&self, input: &str) -> ModelTier {
         let token_estimate = input.split_whitespace().count();
         let has_reasoning = contains_reasoning_keywords(input);
-        let has_code = input.contains("fn ") || input.contains("function ") || input.contains("impl ");
+        let has_code =
+            input.contains("fn ") || input.contains("function ") || input.contains("impl ");
 
         // 长输入 + 需要推理 → Powerful
         if token_estimate > 500 && (has_reasoning || has_code) {
@@ -84,9 +85,19 @@ impl ModelRouter {
 /// 检测推理相关关键词
 fn contains_reasoning_keywords(text: &str) -> bool {
     let keywords = [
-        "分析", "为什么", "如何", "原因", "解释",
-        "分析", "compare", "why", "how", "reason",
-        "explain", "analyze", "evaluate",
+        "分析",
+        "为什么",
+        "如何",
+        "原因",
+        "解释",
+        "分析",
+        "compare",
+        "why",
+        "how",
+        "reason",
+        "explain",
+        "analyze",
+        "evaluate",
     ];
     let lower = text.to_lowercase();
     keywords.iter().any(|k| lower.contains(k))
@@ -125,7 +136,9 @@ mod tests {
     fn suggested_model_names() {
         let router = ModelRouter::with_default_strategy();
         assert!(router.suggested_model(ModelTier::Fast).contains("haiku"));
-        assert!(router.suggested_model(ModelTier::Balanced).contains("sonnet"));
+        assert!(router
+            .suggested_model(ModelTier::Balanced)
+            .contains("sonnet"));
         assert!(router.suggested_model(ModelTier::Powerful).contains("opus"));
     }
 }

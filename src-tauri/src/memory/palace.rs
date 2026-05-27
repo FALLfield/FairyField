@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn auto_classify_emotion() {
         let palace = make_palace();
-        let (wing, room) = palace.auto_classify("今天很开心");
+        let (wing, _) = palace.auto_classify("今天很开心");
         assert_eq!(wing, "emotion");
     }
 

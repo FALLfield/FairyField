@@ -2,7 +2,7 @@
 //!
 //! 带白名单和超时控制的终端命令执行。
 
-use super::executor::{Tool, ToolError};
+use crate::tools::executor::{Tool, ToolError};
 use serde::Deserialize;
 use std::pin::Pin;
 use std::process::{Command, Stdio};
@@ -30,12 +30,7 @@ fn default_timeout() -> u64 {
 }
 
 fn extract_cmd_name(command: &str) -> String {
-    command
-        .trim()
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_string()
+    command.split_whitespace().next().unwrap_or("").to_string()
 }
 
 /// 检查命令是否包含 shell 元字符（防止换行/分号/管道/反引号等注入绕过白名单）

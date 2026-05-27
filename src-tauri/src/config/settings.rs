@@ -3,6 +3,7 @@
 //! 负责应用配置的加载、保存和默认值管理。
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -10,9 +11,17 @@ use std::path::PathBuf;
 const CONFIG_DIR_NAME: &str = ".fairyfield";
 /// 配置文件名称
 const CONFIG_FILE_NAME: &str = "config.json";
+/// 本地密钥文件名称。
+///
+/// TODO: V1.1 将此存储替换为 macOS Keychain / Windows Credential Manager /
+/// Secret Service。当前实现刻意与 config.json 分离，避免公开配置和前端 IPC
+/// 泄漏密钥，同时修复 Onboarding 后重启丢失 API Key 的问题。
+const SECRETS_FILE_NAME: &str = "secrets.json";
 const CURRENT_CONFIG_VERSION: u32 = 1;
 
-fn default_config_version() -> u32 { CURRENT_CONFIG_VERSION }
+fn default_config_version() -> u32 {
+    CURRENT_CONFIG_VERSION
+}
 
 /// 应用全局配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +56,12 @@ pub struct ProviderPreset {
     /// API 密钥：序列化时跳过（不写入文件）
     #[serde(skip_serializing, default)]
     pub api_key: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct SecretStore {
+    #[serde(default)]
+    llm_provider_keys: HashMap<String, String>,
 }
 
 /// LLM 配置
@@ -163,10 +178,18 @@ impl LlmConfig {
             let var = match preset.provider_type.as_str() {
                 "claude" => "ANTHROPIC_API_KEY",
                 "glm" => "GLM_API_KEY",
+                "deepseek" => "DEEPSEEK_API_KEY",
                 _ => "OPENAI_API_KEY",
             };
             if let Ok(key) = std::env::var(var) {
                 preset.api_key = key;
+                return;
+            }
+            // 最后回退：也检查通用的 OPENAI_API_KEY（DeepSeek 等 OpenAI 兼容提供商）
+            if var != "OPENAI_API_KEY" {
+                if let Ok(key) = std::env::var("OPENAI_API_KEY") {
+                    preset.api_key = key;
+                }
             }
         }
     }
@@ -191,12 +214,22 @@ pub struct VoiceConfig {
     pub tts_speed: f32,
 }
 
-fn default_sample_rate() -> u32 { 16000 }
+fn default_sample_rate() -> u32 {
+    16000
+}
 
-fn default_tts_speaker_id() -> i32 { 0 }
-fn default_tts_speed() -> f32 { 1.0 }
-fn default_max_tokens() -> u32 { 2048 }
-fn default_temperature() -> f32 { 0.7 }
+fn default_tts_speaker_id() -> i32 {
+    0
+}
+fn default_tts_speed() -> f32 {
+    1.0
+}
+fn default_max_tokens() -> u32 {
+    2048
+}
+fn default_temperature() -> f32 {
+    0.7
+}
 
 /// 角色配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -224,9 +257,15 @@ pub struct WindowConfig {
     pub click_through: bool,
 }
 
-fn default_window_width() -> f64 { 400.0 }
-fn default_window_height() -> f64 { 700.0 }
-fn default_true() -> bool { true }
+fn default_window_width() -> f64 {
+    400.0
+}
+fn default_window_height() -> f64 {
+    700.0
+}
+fn default_true() -> bool {
+    true
+}
 
 /// 记忆系统配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,9 +280,15 @@ pub struct MemoryConfig {
     pub dedup_threshold: f32,
 }
 
-fn default_embedding_dim() -> usize { 384 }
-fn default_wakeup_tokens() -> usize { 600 }
-fn default_dedup_threshold() -> f32 { 0.9 }
+fn default_embedding_dim() -> usize {
+    384
+}
+fn default_wakeup_tokens() -> usize {
+    600
+}
+fn default_dedup_threshold() -> f32 {
+    0.9
+}
 
 /// 通信网关配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -274,8 +319,12 @@ pub struct UiConfig {
     pub window_always_on_top: bool,
 }
 
-fn default_chat_bubble_width() -> u32 { 320 }
-fn default_font_size() -> u32 { 14 }
+fn default_chat_bubble_width() -> u32 {
+    320
+}
+fn default_font_size() -> u32 {
+    14
+}
 
 /// 返回配置目录路径（`~/.fairyfield/`）
 pub fn config_dir() -> PathBuf {
@@ -285,6 +334,73 @@ pub fn config_dir() -> PathBuf {
 /// 返回配置文件路径（`~/.fairyfield/config.json`）
 pub fn config_file_path() -> PathBuf {
     config_dir().join(CONFIG_FILE_NAME)
+}
+
+fn secrets_file_path() -> PathBuf {
+    config_dir().join(SECRETS_FILE_NAME)
+}
+
+fn load_secret_store_from_path(path: &PathBuf) -> Result<SecretStore, String> {
+    if !path.exists() {
+        return Ok(SecretStore::default());
+    }
+
+    let content = fs::read_to_string(path).map_err(|e| format!("读取密钥文件失败: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("解析密钥文件失败: {e}"))
+}
+
+fn save_secret_store_to_path(path: &PathBuf, store: &SecretStore) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建密钥目录失败: {e}"))?;
+    }
+
+    let json = serde_json::to_string_pretty(store).map_err(|e| format!("序列化密钥失败: {e}"))?;
+    fs::write(path, json).map_err(|e| format!("写入密钥文件失败: {e}"))
+}
+
+fn load_secret_store() -> Result<SecretStore, String> {
+    load_secret_store_from_path(&secrets_file_path())
+}
+
+fn save_secret_store(store: &SecretStore) -> Result<(), String> {
+    save_secret_store_to_path(&secrets_file_path(), store)
+}
+
+fn hydrate_llm_secrets(config: &mut AppConfig) {
+    if let Ok(store) = load_secret_store() {
+        for preset in &mut config.llm.providers {
+            if preset.api_key.is_empty() {
+                if let Some(key) = store.llm_provider_keys.get(&preset.name) {
+                    preset.api_key = key.clone();
+                }
+            }
+        }
+
+        if config.llm.api_key.is_empty() {
+            if let Some(key) = store.llm_provider_keys.get(&config.llm.active_provider) {
+                config.llm.api_key = key.clone();
+            }
+        }
+    }
+}
+
+/// 保存指定 LLM 提供商的 API Key 到本地密钥文件。
+///
+/// 注意：不会写入 config.json，因此 `platform_load_config` 返回给前端时仍会
+/// 通过命令层清空密钥字段。
+pub fn save_llm_provider_api_key(provider_name: &str, api_key: &str) -> Result<(), String> {
+    if provider_name.trim().is_empty() {
+        return Err("provider_name 不能为空".into());
+    }
+    if api_key.trim().is_empty() {
+        return Err("api_key 不能为空".into());
+    }
+
+    let mut store = load_secret_store()?;
+    store
+        .llm_provider_keys
+        .insert(provider_name.to_string(), api_key.to_string());
+    save_secret_store(&store)
 }
 
 /// 从文件加载配置
@@ -299,6 +415,8 @@ pub fn load_from_file() -> Result<AppConfig, String> {
         let mut cfg: AppConfig =
             serde_json::from_str(&content).map_err(|e| format!("解析配置文件失败: {e}"))?;
 
+        hydrate_llm_secrets(&mut cfg);
+
         // 环境变量覆盖 api_key
         if let Ok(key) = std::env::var("FAIRYFIELD_API_KEY") {
             cfg.llm.api_key = key;
@@ -308,13 +426,14 @@ pub fn load_from_file() -> Result<AppConfig, String> {
         if cfg.version < CURRENT_CONFIG_VERSION {
             tracing::info!(
                 "配置文件版本过旧 (v{} → v{})，将自动升级",
-                cfg.version, CURRENT_CONFIG_VERSION
+                cfg.version,
+                CURRENT_CONFIG_VERSION
             );
             cfg.version = CURRENT_CONFIG_VERSION;
         }
         cfg
     } else {
-        let cfg = default_config();
+        let mut cfg = default_config();
         // 尝试保存默认配置；目录不存在则创建
         if let Some(parent) = path.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
@@ -327,9 +446,10 @@ pub fn load_from_file() -> Result<AppConfig, String> {
             }
         }
 
+        hydrate_llm_secrets(&mut cfg);
+
         // 环境变量覆盖 api_key
         if let Ok(key) = std::env::var("FAIRYFIELD_API_KEY") {
-            let mut cfg = default_config();
             cfg.llm.api_key = key;
             return Ok(cfg);
         }
@@ -381,7 +501,7 @@ pub fn default_config() -> AppConfig {
             tts_speed: 1.0,
         },
         character: CharacterConfig {
-            model_path: "models/default/default.vrm".to_string(),
+            model_path: "models/default/2031903848872972007.glb".to_string(),
             default_expression: "neutral".to_string(),
         },
         window: WindowConfig {
@@ -520,6 +640,24 @@ mod tests {
     }
 
     #[test]
+    fn secret_store_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secrets.json");
+        let mut store = SecretStore::default();
+        store
+            .llm_provider_keys
+            .insert("DeepSeek V4 Flash".into(), "sk-secret".into());
+
+        save_secret_store_to_path(&path, &store).unwrap();
+        let loaded = load_secret_store_from_path(&path).unwrap();
+
+        assert_eq!(
+            loaded.llm_provider_keys.get("DeepSeek V4 Flash"),
+            Some(&"sk-secret".to_string())
+        );
+    }
+
+    #[test]
     fn active_preset_returns_named_provider() {
         let config = default_config();
         let preset = config.llm.active_preset();
@@ -575,7 +713,7 @@ mod tests {
                 "temperature": 0.5
             },
             "voice": { "asr_model": "paraformer", "tts_model": "kokoro", "vad_model": "silero-vad", "sample_rate": 16000, "language": "zh" },
-            "character": { "model_path": "models/default/default.vrm", "default_expression": "neutral" },
+            "character": { "model_path": "models/default/2031903848872972007.glb", "default_expression": "neutral" },
             "window": { "width": 400, "height": 700, "transparent": true, "always_on_top": true, "decorations": false, "click_through": true },
             "memory": { "db_path": "fairyfield.db", "embedding_dim": 384, "wakeup_max_tokens": 600, "dedup_threshold": 0.9 },
             "gateway": { "telegram_enabled": false, "telegram_token": "", "cron_enabled": false },
@@ -615,8 +753,8 @@ mod tests {
             "gateway": {},
             "ui": {}
         }"#;
-        let parsed: AppConfig = serde_json::from_str(json)
-            .expect("最简配置反序列化应成功（所有字段有 default）");
+        let parsed: AppConfig =
+            serde_json::from_str(json).expect("最简配置反序列化应成功（所有字段有 default）");
         assert_eq!(parsed.llm.active_provider, "DeepSeek V4 Flash");
         assert_eq!(parsed.llm.providers[0].api_key, "sk-test");
         assert_eq!(parsed.window.width, 400.0);
@@ -645,7 +783,7 @@ mod tests {
                 "temperature": 0.7
             },
             "voice": { "asr_model": "paraformer", "tts_model": "kokoro", "vad_model": "silero-vad", "sample_rate": 16000, "language": "zh" },
-            "character": { "model_path": "models/default/default.vrm", "default_expression": "neutral" },
+            "character": { "model_path": "models/default/2031903848872972007.glb", "default_expression": "neutral" },
             "window": { "width": 400, "height": 700, "transparent": true, "always_on_top": true, "decorations": false, "click_through": true },
             "memory": { "db_path": "fairyfield.db", "embedding_dim": 384, "wakeup_max_tokens": 600, "dedup_threshold": 0.9 },
             "gateway": { "telegram_enabled": false, "telegram_token": "", "cron_enabled": false },

@@ -8,6 +8,26 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
+export function isTauriEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as typeof window & {
+    __TAURI_INTERNALS__?: unknown;
+    __TAURI__?: unknown;
+  };
+  return Boolean(w.__TAURI_INTERNALS__ || w.__TAURI__);
+}
+
+function browserPreviewEmotion(): EmotionState {
+  return {
+    current: 'happy',
+    intensity: 0.55,
+    values: {
+      happy: 0.55,
+      neutral: 0.45,
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 类型定义
 // ---------------------------------------------------------------------------
@@ -138,12 +158,30 @@ export interface ProviderPreset {
   api_key: string;
 }
 
+/** 首次启动用户配置 */
+export interface UserConfig {
+  user_name: string;
+  call_preference: string;
+  fairy_name: string;
+  personality: 'warm' | 'playful' | 'quiet' | 'custom';
+  custom_personality?: string | null;
+  language: string;
+  onboarding_completed: boolean;
+  created_at?: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // AI Agent 命令（Phase 2 命名）
 // ---------------------------------------------------------------------------
 
 /** 发送聊天消息，返回回复和情绪 */
 export async function agentChat(message: string): Promise<ChatResponse> {
+  if (!isTauriEnvironment()) {
+    return {
+      reply: `浏览器预览模式：我收到啦。「${message}」`,
+      emotion: browserPreviewEmotion(),
+    };
+  }
   return invoke<ChatResponse>('agent_chat', { message });
 }
 
@@ -152,6 +190,19 @@ export async function agentChatStream(
   message: string,
   onEvent: (event: StreamEvent) => void,
 ): Promise<ChatResponse> {
+  if (!isTauriEnvironment()) {
+    const reply = `浏览器预览模式：我收到啦。「${message}」`;
+    for (const chunk of reply.match(/.{1,6}/gu) ?? [reply]) {
+      onEvent({ type: 'chunk', content: chunk });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    onEvent({ type: 'done', content: '' });
+    return {
+      reply,
+      emotion: browserPreviewEmotion(),
+    };
+  }
+
   const unlistenToken = await listen<string>('agent:stream-token', (event) => {
     onEvent({ type: 'chunk', content: event.payload });
   });
@@ -159,16 +210,17 @@ export async function agentChatStream(
     onEvent({ type: 'done', content: '' });
   });
 
-  const response = await invoke<ChatResponse>('agent_chat_stream', { message });
-
-  unlistenToken();
-  unlistenDone();
-
-  return response;
+  try {
+    return await invoke<ChatResponse>('agent_chat_stream', { message });
+  } finally {
+    unlistenToken();
+    unlistenDone();
+  }
 }
 
 /** 获取当前情绪状态 */
 export async function agentGetEmotion(): Promise<EmotionState> {
+  if (!isTauriEnvironment()) return browserPreviewEmotion();
   return invoke<EmotionState>('agent_get_emotion');
 }
 
@@ -178,17 +230,75 @@ export async function agentGetEmotion(): Promise<EmotionState> {
 
 /** 列出所有可用的 LLM 提供商预设 */
 export async function llmListProviders(): Promise<ProviderPreset[]> {
+  if (!isTauriEnvironment()) {
+    return [
+      {
+        name: 'Browser Preview',
+        provider_type: 'mock',
+        api_endpoint: 'browser-preview',
+        model: 'preview',
+        api_key: '',
+      },
+    ];
+  }
   return invoke<ProviderPreset[]>('llm_list_providers');
 }
 
 /** 切换活跃的 LLM 提供商 */
 export async function llmSwitchProvider(name: string): Promise<void> {
+  if (!isTauriEnvironment()) {
+    if (!name) throw new Error('请选择提供商');
+    return;
+  }
   return invoke<void>('llm_switch_provider', { name });
 }
 
 /** 获取当前活跃的 LLM 提供商 */
 export async function llmGetActiveProvider(): Promise<ProviderPreset> {
+  if (!isTauriEnvironment()) {
+    return {
+      name: 'Browser Preview',
+      provider_type: 'mock',
+      api_endpoint: 'browser-preview',
+      model: 'preview',
+      api_key: '',
+    };
+  }
   return invoke<ProviderPreset>('llm_get_active_provider');
+}
+
+/** 保存 LLM API Key 到后端密钥存储并重建 Agent */
+export async function llmSaveApiKey(
+  providerName: string,
+  apiKey: string,
+): Promise<void> {
+  if (!isTauriEnvironment()) {
+    if (!providerName || !apiKey) throw new Error('Provider 和 API Key 不能为空');
+    return;
+  }
+  return invoke<void>('llm_save_api_key', { providerName, apiKey });
+}
+
+/** 测试 LLM Provider + API Key，不持久化 */
+export async function llmTestProvider(
+  providerName: string,
+  apiKey: string,
+): Promise<void> {
+  if (!isTauriEnvironment()) {
+    if (!providerName || !apiKey) throw new Error('Provider 和 API Key 不能为空');
+    return;
+  }
+  return invoke<void>('llm_test_provider', { providerName, apiKey });
+}
+
+/** 加载首次启动用户配置 */
+export async function userLoadConfig(): Promise<UserConfig> {
+  return invoke<UserConfig>('user_load_config');
+}
+
+/** 保存首次启动用户配置 */
+export async function userSaveConfig(config: UserConfig): Promise<void> {
+  return invoke<void>('user_save_config', { config });
 }
 
 // ---------------------------------------------------------------------------
@@ -197,16 +307,22 @@ export async function llmGetActiveProvider(): Promise<ProviderPreset> {
 
 /** 开始语音识别，返回识别到的文本 */
 export async function voiceStartAsr(): Promise<string> {
+  if (!isTauriEnvironment()) return '';
   return invoke<string>('voice_start_asr');
 }
 
 /** 开始语音合成 */
 export async function voiceStartTts(text: string): Promise<void> {
+  if (!isTauriEnvironment()) {
+    if (!text.trim()) throw new Error('TTS 文本不能为空');
+    return;
+  }
   return invoke<void>('voice_start_tts', { text });
 }
 
 /** 获取 VAD（语音活动检测）状态 */
 export async function voiceGetVadState(): Promise<boolean> {
+  if (!isTauriEnvironment()) return false;
   return invoke<boolean>('voice_get_vad_state');
 }
 

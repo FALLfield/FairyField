@@ -1,7 +1,14 @@
 {
   "name": "fairyfield",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "Desktop AI companion with a 3D character, memory, voice, tools, and Coding Agent integration.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fallfield/FairyField.git",
+    "directory": "FairyField"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

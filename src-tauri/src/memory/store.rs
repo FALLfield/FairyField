@@ -62,7 +62,10 @@ impl MemoryStore {
         }
         .map_err(|e| e.to_string())?;
 
-        let store = Self { conn, jieba: Jieba::new() };
+        let store = Self {
+            conn,
+            jieba: Jieba::new(),
+        };
         store.init_tables()?;
         Ok(store)
     }
@@ -206,6 +209,7 @@ impl MemoryStore {
     // -----------------------------------------------------------------------
 
     /// 存入记忆抽屉（事务保护：drawer + FTS 同步）
+    #[allow(clippy::too_many_arguments)]
     pub fn save_drawer(
         &self,
         content: &str,

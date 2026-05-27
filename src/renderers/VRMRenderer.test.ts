@@ -54,7 +54,7 @@ vi.mock('@pixiv/three-vrm', () => ({
   VRMLoaderPlugin: vi.fn().mockImplementation(function () {}),
   VRMUtils: {
     removeUnnecessaryVertices: vi.fn(),
-    removeUnnecessaryJoints: vi.fn(),
+    combineSkeletons: vi.fn(),
   },
 }));
 
@@ -155,7 +155,7 @@ describe('VRMRenderer', () => {
     await renderer.loadVRM('/models/test.vrm');
 
     expect(VRMUtils.removeUnnecessaryVertices).toHaveBeenCalled();
-    expect(VRMUtils.removeUnnecessaryJoints).toHaveBeenCalled();
+    expect(VRMUtils.combineSkeletons).toHaveBeenCalled();
     expect(mockScene.rotation.y).toBe(Math.PI);
     expect(renderer.getVRM()).toBe(mockVRM);
 

@@ -3,6 +3,8 @@
 use super::executor::Tool;
 use super::registry::ToolRegistry;
 use std::sync::Arc;
+use std::time::Instant;
+use tauri::Emitter;
 use tauri::State;
 
 /// Tools subsystem managed state
@@ -19,7 +21,7 @@ pub fn tools_list(state: State<'_, ToolsState>) -> Result<Vec<serde_json::Value>
     let registry = state.registry.lock().map_err(|e| e.to_string())?;
     Ok(registry
         .tool_descriptions()
-        .iter()
+        .into_iter()
         .map(|info| {
             serde_json::json!({
                 "name": info.name,
@@ -35,6 +37,7 @@ pub async fn tools_execute(
     tool_name: String,
     input: String,
     state: State<'_, ToolsState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
     // Access the ToolExecutor's internal tool map to clone the Arc<dyn Tool>
     // before releasing the lock, so the future is Send-safe.
@@ -50,5 +53,19 @@ pub async fn tools_execute(
         return Err(format!("参数验证失败: {}", input));
     }
 
-    tool.execute(&input).await.map_err(|e| e.to_string())
+    let start = Instant::now();
+    let result = tool.execute(&input).await;
+    let duration_ms = start.elapsed().as_millis() as u64;
+
+    let success = result.is_ok();
+    let _ = app_handle.emit(
+        "tool-executed",
+        serde_json::json!({
+            "tool": tool_name,
+            "duration_ms": duration_ms,
+            "success": success,
+        }),
+    );
+
+    result.map_err(|e| e.to_string())
 }
