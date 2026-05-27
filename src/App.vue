@@ -47,7 +47,7 @@ const {
 } = useVoice();
 
 const { devMode, onAvatarTripleClick } = useDevMode();
-const { status: agentStatus, toolLog, resetStatus: resetAgentStatus } = useAgentStatus();
+const { status: agentStatus, toolLog, resetStatus: resetAgentStatus, setStatus: setAgentStatus } = useAgentStatus();
 const { showOnboarding, isLoading: onboardingLoading, completeOnboarding } = useOnboarding();
 
 // --- 录音状态 ---
@@ -57,12 +57,21 @@ const recordingText = ref('');
 /** 发送消息并在 AI 回复完成后自动触发 TTS */
 async function sendWithTts(text: string): Promise<void> {
   resetAgentStatus();
-  await send(text);
-  // 获取最后一条消息（send 完成后 assistant 消息已入列）
-  const lastMsg = messages.value[messages.value.length - 1];
-  if (lastMsg?.role === 'assistant' && lastMsg.content) {
-    speak(lastMsg.content); // 不 await，异步播放不阻塞
+  try {
+    await send(text);
+    // 获取最后一条消息（send 完成后 assistant 消息已入列）
+    const lastMsg = messages.value[messages.value.length - 1];
+    if (lastMsg?.role === 'assistant' && lastMsg.content) {
+      speak(lastMsg.content); // 不 await，异步播放不阻塞
+    }
+  } finally {
+    setAgentStatus('idle');
   }
+}
+
+function abortAgentReply(): void {
+  abort();
+  setAgentStatus('idle');
 }
 
 /** 开始/停止语音识别 */
@@ -162,7 +171,7 @@ async function handleOnboardingComplete(data: OnboardingData): Promise<void> {
         :is-recording="isRecording"
         :recording-text="recordingText"
         @send="sendWithTts"
-        @abort="abort"
+        @abort="abortAgentReply"
         @clear="clearHistory"
         @toggle-mic="toggleRecording"
       />

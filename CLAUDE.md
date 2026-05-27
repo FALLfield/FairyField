@@ -31,15 +31,16 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 
 **当前仓库内的架构说明以 `README.md`、`ARCHITECTURE.md`、`PROJECT_STRUCTURE.md`、`docs/USAGE_GUIDE.md` 和源码模块为准。**
 
-## Current Phase: v1.0.0 发布候选 ✅ Phase 6 完成
+## Current Phase: v1.0.0 发布候选 ✅ Phase 6 完成 + v1 工具/记忆硬化
 
-### Release State (2026-05-26)
+### Release State (2026-05-28)
 
 - ✅ Phase 0-5 已完成：桌面容器、3D 角色、语音管道、记忆、Agent Loop、MVP 发布资料。
 - ✅ Phase 6 已完成：UI 分层、工具系统、用户引导、Coding Agent、MCP 双向集成、社区插件和共享记忆后端。
+- ✅ v1 硬化已完成：Web/weather 工具、网页抓取、UTF-8 截断、工具超时和 MemPalace 风格 wake-up/去重已补强。
 - ✅ 版本已统一到 `1.0.0`：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
 - ✅ 默认模型路径指向仓库内可用资源：`public/models/default/2031903848872972007.glb`。
-- ✅ 自动化测试：369 Rust + 97 Frontend = 466 tests passed。
+- ✅ 自动化测试：379 Rust + 97 Frontend = 476 tests passed。
 - ✅ 发布前验证命令：`npm run build`、`npm run test`、`cargo check`、`cargo test`、`cargo clippy -- -D warnings`、`cargo fmt --check`。
 
 ### Phase 6 完成项
@@ -54,6 +55,7 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 | MCP Server | ✅ | 暴露 `fairy.execute_tool`、`fairy.get_context`、记忆搜索、wake-up、profile 等能力。 |
 | 共享记忆 | ✅ | `AgentMemoryBackend` 为外部 coding agents 提供上下文检索、去重写入和 diary 接口。 |
 | 发布文档 | ✅ | README、CHANGELOG、CONTRIBUTING、USAGE_GUIDE 更新到 v1.0.0。 |
+| v1 工具/记忆硬化 | ✅ | 天气专用搜索路径、网页抓取安全重定向/DNS 超时/SSRF 防护、UTF-8 安全输出、真实 drawer 派生 wake-up 和保存前去重。 |
 
 ### 已修复关键风险
 
@@ -64,6 +66,9 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 - ✅ ChatHistory 用户消息右对齐，连续消息分组布局正确。
 - ✅ Coding Agent 子进程支持超时终止、输出限制和路径校验。
 - ✅ Tool registry 使用 memory-aware registry，工具执行路径与 Agent Loop/MCP 共享。
+- ✅ 中文/emoji 工具结果不再因字节截断触发 panic。
+- ✅ `web_fetch` 不再自动跟随不安全重定向，长响应会截断并标注。
+- ✅ fallback 对话记忆保存用户原文，不再截断摘要。
 
 ### 待后续（Phase 7+）
 

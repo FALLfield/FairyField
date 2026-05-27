@@ -7,6 +7,7 @@ use crate::llm::{
     ChatConfig, LlmError, LlmProviderConfig, LlmResponse, Message, MessageRole, StreamChunk,
     ToolCallRequest, ToolDefinition,
 };
+use crate::text::truncate_chars;
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
@@ -14,7 +15,10 @@ use serde_json::json;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
+
+const LLM_REQUEST_TIMEOUT_SECS: u64 = 60;
 
 /// LLM 提供商 trait（dyn-compatible，使用 Pin<Box<dyn Future>>）
 pub trait LlmProvider: Send + Sync {
@@ -323,7 +327,10 @@ impl OpenAiProvider {
             return Err(LlmError("OpenAI API Key 不能为空".to_string()));
         }
         Ok(Self {
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(Duration::from_secs(LLM_REQUEST_TIMEOUT_SECS))
+                .build()
+                .map_err(|e| LlmError(format!("HTTP client 初始化失败: {}", e)))?,
             api_key: config.api_key,
             base_url: config.api_endpoint.trim_end_matches('/').to_string(),
             model: config.model,
@@ -425,7 +432,7 @@ impl LlmProvider for OpenAiProvider {
 
             eprintln!(
                 "[DEBUG] LLM raw response: {}",
-                &response_text[..response_text.len().min(500)]
+                truncate_chars(&response_text, 500)
             );
             let parsed: OpenAiResponse = serde_json::from_str(&response_text)
                 .map_err(|e| LlmError(format!("解析响应失败: {} - {}", e, response_text)))?;
@@ -647,7 +654,10 @@ impl ClaudeProvider {
             return Err(LlmError("Anthropic API Key 不能为空".to_string()));
         }
         Ok(Self {
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(Duration::from_secs(LLM_REQUEST_TIMEOUT_SECS))
+                .build()
+                .map_err(|e| LlmError(format!("HTTP client 初始化失败: {}", e)))?,
             api_key: config.api_key,
             model: config.model,
         })

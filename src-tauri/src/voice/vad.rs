@@ -172,7 +172,7 @@ impl VadEngine for SileroVad {
         if cfg!(feature = "sherpa-onnx") {
             "sherpa-onnx-silero-vad"
         } else {
-            "sherpa-onnx-silero-vad (stub)"
+            "mock-vad-fallback"
         }
     }
 }

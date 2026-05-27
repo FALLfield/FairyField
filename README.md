@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Vue-3.5-green?logo=vue.js" alt="Vue">
   <img src="https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri" alt="Tauri">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
-  <img src="https://img.shields.io/badge/Tests-450%2B%20passed-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-476%20passed-brightgreen" alt="Tests">
 </p>
 
 ## 为什么是 FairyField？
@@ -31,7 +31,7 @@
 | 🧠 **AI 灵魂** | Claude / GPT 驱动，自主工具调用，情感陪伴对话 |
 | 💬 **语音输入** | 点击麦克风说话，自动转文字 → AI 回复 → 语音朗读 |
 | 📝 **长期记忆** | 4 层记忆堆栈 + 时序知识图谱 + 向量语义搜索 |
-| 🧰 **全能工具** | 文件、Git、Web、Obsidian、GitHub、MCP、社区插件与 Coding Agent 桥接 |
+| 🧰 **全能工具** | 文件、Git、Web/天气、网页抓取、Obsidian、GitHub、MCP、社区插件与 Coding Agent 桥接 |
 | 🔒 **隐私优先** | 语音 100% 离线处理，记忆存在本地 SQLite |
 | 🪟 **桌面覆盖** | 透明置顶窗口，点击穿透，不干扰工作 |
 | 🛡️ **安全防护** | Prompt 注入检测 + 命令白名单 + 密钥自动脱敏 |
@@ -135,7 +135,7 @@ npm run test         # 前端测试 (97 tests)
 
 cd src-tauri
 cargo check          # 编译检查
-cargo test           # Rust 测试 (369 tests)
+cargo test           # Rust 测试 (379 tests)
 cargo clippy         # Lint
 ```
 
@@ -145,7 +145,7 @@ cargo clippy         # Lint
 |-------|------|------|
 | 0 – 4.5 | 架构 → 核心 → 语音 → 智能 → 收尾 | ✅ 已完成 |
 | 5 | MVP 发布（真实语音引擎 + 语音输入 UI） | ✅ |
-| 6 | UI 优化 · 工具系统 · 用户引导 · Coding Agent 集成 | ✅ |
+| 6 | UI 优化 · 工具系统 · 用户引导 · Coding Agent 集成 · v1 工具/记忆硬化 | ✅ |
 | 未来 | 全息投影 · 数据采集 · 更多通信平台 | ⏳ |
 
 ## 文档

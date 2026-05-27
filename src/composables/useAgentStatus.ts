@@ -19,6 +19,7 @@ let unlistenToolLog: UnlistenFn | null = null;
 
 export function useAgentStatus() {
   onMounted(async () => {
+    status.value = 'idle';
     if (!isTauriEnvironment()) return;
 
     if (!unlistenStatus) {
@@ -61,9 +62,14 @@ export function useAgentStatus() {
     toolLog.value = [];
   }
 
+  function setStatus(next: AgentStatus): void {
+    status.value = next;
+  }
+
   return {
     status: readonly(status),
     toolLog: readonly(toolLog),
     resetStatus,
+    setStatus,
   };
 }

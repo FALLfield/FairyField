@@ -220,6 +220,10 @@ impl MemoryStore {
         tags: &str,
         importance: f32,
     ) -> Result<i64, String> {
+        if let Some(existing_id) = self.find_duplicate_drawer_id(content, wing, room)? {
+            return Ok(existing_id);
+        }
+
         let now = now();
         let tx = self
             .conn
@@ -249,6 +253,35 @@ impl MemoryStore {
 
         tx.commit().map_err(|e| e.to_string())?;
         Ok(id)
+    }
+
+    /// 查找同一 wing/room 下规范化后完全相同的记忆，避免重复写入。
+    pub fn find_duplicate_drawer_id(
+        &self,
+        content: &str,
+        wing: &str,
+        room: &str,
+    ) -> Result<Option<i64>, String> {
+        let normalized = normalize_memory_content(content);
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, content FROM memory_drawers WHERE wing = ?1 AND room = ?2")
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map(params![wing, room], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| e.to_string())?;
+
+        for row in rows {
+            let (id, existing_content) = row.map_err(|e| e.to_string())?;
+            if normalize_memory_content(&existing_content) == normalized {
+                return Ok(Some(id));
+            }
+        }
+
+        Ok(None)
     }
 
     /// FTS5 全文搜索（自动对中文查询分词）
@@ -337,6 +370,108 @@ impl MemoryStore {
         Ok(results)
     }
 
+    /// 按 wing + room 查询抽屉
+    pub fn get_drawers_by_room(
+        &self,
+        wing: &str,
+        room: &str,
+        limit: usize,
+    ) -> Result<Vec<Drawer>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, content, category, wing, room, hall, tags, importance, created_at, accessed_at, access_count
+                 FROM memory_drawers
+                 WHERE wing = ?1 AND room = ?2
+                 ORDER BY importance DESC, created_at DESC
+                 LIMIT ?3",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map(params![wing, room, limit as i64], |row| {
+                Ok(Drawer {
+                    id: row.get(0)?,
+                    content: row.get(1)?,
+                    category: row.get(2)?,
+                    wing: row.get(3)?,
+                    room: row.get(4)?,
+                    hall: row.get(5)?,
+                    tags: row.get(6)?,
+                    importance: row.get(7)?,
+                    created_at: row.get(8)?,
+                    accessed_at: row.get(9)?,
+                    access_count: row.get(10)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+
+        collect_drawers(rows)
+    }
+
+    /// 获取最重要/最近的记忆，用于 L1 wake-up 摘要。
+    pub fn get_top_drawers(&self, limit: usize) -> Result<Vec<Drawer>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, content, category, wing, room, hall, tags, importance, created_at, accessed_at, access_count
+                 FROM memory_drawers
+                 ORDER BY importance DESC, accessed_at DESC, created_at DESC
+                 LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map(params![limit as i64], |row| {
+                Ok(Drawer {
+                    id: row.get(0)?,
+                    content: row.get(1)?,
+                    category: row.get(2)?,
+                    wing: row.get(3)?,
+                    room: row.get(4)?,
+                    hall: row.get(5)?,
+                    tags: row.get(6)?,
+                    importance: row.get(7)?,
+                    created_at: row.get(8)?,
+                    accessed_at: row.get(9)?,
+                    access_count: row.get(10)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+
+        collect_drawers(rows)
+    }
+
+    /// 获取 wing/room 统计，用于 L2 palace index。
+    pub fn get_room_counts(&self, limit: usize) -> Result<Vec<(String, String, i64)>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT wing, room, COUNT(*) as count
+                 FROM memory_drawers
+                 GROUP BY wing, room
+                 ORDER BY count DESC, wing ASC, room ASC
+                 LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map(params![limit as i64], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+
+        let mut counts = Vec::new();
+        for row in rows {
+            counts.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(counts)
+    }
+
     /// 更新访问记录
     pub fn update_access(&self, id: i64) -> Result<(), String> {
         let now = now();
@@ -381,6 +516,26 @@ fn now() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as i64
+}
+
+fn normalize_memory_content(content: &str) -> String {
+    content.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn collect_drawers<F>(rows: rusqlite::MappedRows<'_, F>) -> Result<Vec<Drawer>, String>
+where
+    F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<Drawer>,
+{
+    let mut results = Vec::new();
+    for row in rows {
+        match row {
+            Ok(drawer) => results.push(drawer),
+            Err(e) => {
+                eprintln!("Warning: drawer row deserialization failed: {}", e);
+            }
+        }
+    }
+    Ok(results)
 }
 
 // ===========================================================================
@@ -436,7 +591,6 @@ mod tests {
 
     #[test]
     fn test_save_and_search_drawer() {
-        // TODO: FTS5 default tokenizer doesn't handle CJK; switch to jieba tokenizer for Chinese
         let store = make_store();
         store
             .save_drawer(
@@ -467,6 +621,36 @@ mod tests {
     }
 
     #[test]
+    fn test_save_drawer_deduplicates_normalized_content() {
+        let store = make_store();
+        let first = store
+            .save_drawer(
+                "I love   programming\nin Rust",
+                "daily",
+                "hobbies",
+                "tech",
+                "preference",
+                "",
+                0.8,
+            )
+            .unwrap();
+        let second = store
+            .save_drawer(
+                "I love programming in Rust",
+                "daily",
+                "hobbies",
+                "tech",
+                "preference",
+                "",
+                0.8,
+            )
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(store.get_drawers_by_wing("daily", 10).unwrap().len(), 1);
+    }
+
+    #[test]
     fn test_get_drawers_by_wing() {
         let store = make_store();
         store
@@ -480,6 +664,26 @@ mod tests {
         let work = store.get_drawers_by_wing("work", 10).unwrap();
         assert_eq!(daily.len(), 1);
         assert_eq!(work.len(), 1);
+    }
+
+    #[test]
+    fn test_room_counts_and_room_recall() {
+        let store = make_store();
+        store
+            .save_drawer("工作笔记 A", "work", "notes", "general", "general", "", 0.7)
+            .unwrap();
+        store
+            .save_drawer("工作笔记 B", "work", "notes", "general", "general", "", 0.6)
+            .unwrap();
+        store
+            .save_drawer("生活记录", "daily", "log", "general", "general", "", 0.5)
+            .unwrap();
+
+        let counts = store.get_room_counts(10).unwrap();
+        assert!(counts.contains(&("work".to_string(), "notes".to_string(), 2)));
+
+        let notes = store.get_drawers_by_room("work", "notes", 10).unwrap();
+        assert_eq!(notes.len(), 2);
     }
 
     #[test]

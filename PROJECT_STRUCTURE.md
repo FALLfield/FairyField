@@ -24,6 +24,7 @@ FairyField/
 │   │   ├── security/            # Injection guard, command guard, redaction
 │   │   ├── tools/               # Tool registry, executor, manifests, builtins, MCP
 │   │   ├── voice/               # ASR/TTS/VAD/audio input
+│   │   ├── text.rs              # UTF-8 safe text truncation helpers
 │   │   ├── lib.rs
 │   │   └── main.rs
 │   ├── Cargo.toml

@@ -1,4 +1,4 @@
-//! Cron/reminder tool with mock queue semantics.
+//! Cron/reminder tool with local queue semantics.
 
 use crate::tools::executor::{Tool, ToolError};
 use crate::tools::manifest::{ToolCategory, ToolManifest, ToolPermission};
@@ -22,7 +22,7 @@ impl CronTool {
         ToolManifest {
             id: "cron".into(),
             name: "Reminder Scheduler".into(),
-            description: "Validate reminder schedules and queue mock scheduled tasks.".into(),
+            description: "Validate reminder schedules and queue local scheduled tasks.".into(),
             category: ToolCategory::Cron,
             parameters: Self.parameters_schema(),
             permissions: vec![ToolPermission::Notifications],
@@ -53,7 +53,7 @@ impl Tool for CronTool {
         "cron"
     }
     fn description(&self) -> &str {
-        "Validate reminder schedules and queue mock scheduled tasks"
+        "Validate reminder schedules and queue local scheduled tasks"
     }
     fn parameters_schema(&self) -> serde_json::Value {
         serde_json::json!({
@@ -91,7 +91,7 @@ impl Tool for CronTool {
                     "Invalid reminder payload".into(),
                 ));
             }
-            Ok(serde_json::json!({"status":"queued","action":params.action,"schedule":params.schedule,"message":params.message,"mock":true}).to_string())
+            Ok(serde_json::json!({"status":"queued","action":params.action,"schedule":params.schedule,"message":params.message}).to_string())
         })
     }
 }

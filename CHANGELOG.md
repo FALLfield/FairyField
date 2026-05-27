@@ -2,7 +2,7 @@
 
 All notable changes to FairyField will be documented in this file.
 
-## [1.0.0] — 2026-05-26
+## [1.0.0] — 2026-05-28
 
 ### Added
 - Emotion/Chat UI separation: ControlPanel moved to top-left, default collapsed
@@ -16,7 +16,7 @@ All notable changes to FairyField will be documented in this file.
 - Token compressor (TokenJuice-style: HTML to text, URL shortening, truncation)
 - Tools directory restructured: builtins/ (web, file_ops, shell, git, memory, obsidian)
 - Obsidian vault integration tool (search notes, read/write, walkdir traversal)
-- 117 new Rust tests (369 total), tools/mcp/rate_limit token bucket, and full built-in tool smoke coverage
+- 127 new Rust tests (379 total), tools/mcp/rate_limit token bucket, and full built-in tool smoke coverage
 - User configuration system (config/user.rs, ~/.fairyfield/user.json)
 - Coding Agent Manager (Claude Code/KiloCode/OpenCode CLI subprocess support)
 - GitHub API integration tool
@@ -32,7 +32,9 @@ All notable changes to FairyField will be documented in this file.
 - Tool directory: flat tools/ to tools/builtins/ + tools/mcp/ + tools/community/
 - MCP Server: 3 tools to 5 tools (added execute_tool + get_context)
 - Release metadata aligned for GitHub v1 publication
-- Release verification now covers 466 automated tests (369 Rust + 97 Frontend)
+- Release verification now covers 476 automated tests (379 Rust + 97 Frontend)
+- Memory wake-up now derives L1 summaries and L2 palace indexes from stored drawers before falling back to static metadata
+- Memory saves now skip normalized exact duplicates in the same wing/room, and fallback conversation mining stores user text verbatim instead of truncating it
 
 ### Fixed
 - `autoResize()` in ChatInput now properly recalculates on input event
@@ -41,7 +43,13 @@ All notable changes to FairyField will be documented in this file.
 - LLM API keys saved during onboarding persist across restart outside public `config.json`
 - Character click-through no longer steals chat/control input clicks
 - Grouped user chat bubbles align to the right
-- Web search now uses a DuckDuckGo Lite fallback plus encoded search links when the Instant Answer API has no results
+- Web search now uses DuckDuckGo Instant Answer, curl-backed fallback, DuckDuckGo Lite fallback, and encoded search links when upstream sources are unavailable
+- Web/weather search no longer panics on Chinese output; all tool-log truncation is UTF-8 safe
+- Weather queries now use dedicated weather providers before generic web search, with a short-timeout curl fallback for environments where reqwest cannot reach Open-Meteo
+- Web fetch now has manual safe redirects, async DNS timeouts, private-network blocking, response-size caps, and clear timeout/error messages
+- Tool IPC execution now enforces a 30 second timeout instead of allowing long-running tools to hang the UI
+- Search/fetch/weather tool results now return directly to chat when the tool output is already user-facing, so slow post-tool LLM summarization cannot hide the result
+- Agent status badges are reset on mount and after send/abort so stale `executing_tool` states do not linger in the UI
 - Git tool now executes real read-only git commands instead of returning a placeholder response
 - Agent status badge now returns to idle after stream completion or error
 - Browser preview no longer crashes when Tauri event listeners are unavailable

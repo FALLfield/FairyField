@@ -3,9 +3,11 @@
 use super::executor::Tool;
 use super::registry::ToolRegistry;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::Emitter;
 use tauri::State;
+
+const TOOL_IPC_TIMEOUT_SECS: u64 = 30;
 
 /// Tools subsystem managed state
 ///
@@ -54,7 +56,13 @@ pub async fn tools_execute(
     }
 
     let start = Instant::now();
-    let result = tool.execute(&input).await;
+    let result = tokio::time::timeout(
+        Duration::from_secs(TOOL_IPC_TIMEOUT_SECS),
+        tool.execute(&input),
+    )
+    .await
+    .map_err(|_| format!("工具执行超时: {}", tool_name))
+    .and_then(|result| result.map_err(|e| e.to_string()));
     let duration_ms = start.elapsed().as_millis() as u64;
 
     let success = result.is_ok();
@@ -67,5 +75,5 @@ pub async fn tools_execute(
         }),
     );
 
-    result.map_err(|e| e.to_string())
+    result
 }

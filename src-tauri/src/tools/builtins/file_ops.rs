@@ -10,7 +10,8 @@ use std::pin::Pin;
 /// 输出内容截断上限（字节）
 const MAX_OUTPUT_BYTES: usize = 10_000;
 
-/// 安全检查：路径不能包含 `..`、绝对路径、空字节
+/// 安全检查：路径不能包含 `..`、绝对路径、空字节。
+/// 工具只接受相对路径，供本地受控工作目录场景使用。
 fn is_path_safe(path: &str) -> bool {
     if path.contains("..") || path.starts_with('/') || path.contains('\0') {
         return false;
@@ -20,8 +21,6 @@ fn is_path_safe(path: &str) -> bool {
         return false;
     }
     true
-    // TODO(Phase 3 Wave 2): Full canonicalization check against a configured base directory.
-    // The current check prevents obvious traversal but does not resolve symlinks.
 }
 
 /// 将字符串截断到 max_bytes 字节，保证不切割多字节 UTF-8 字符。

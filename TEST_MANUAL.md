@@ -1,6 +1,6 @@
 # FairyField Manual Test Checklist
 
-> v1.0.0 release candidate, 2026-05-26. Automated baseline: 369 Rust tests + 97 frontend tests = 466 passed.
+> v1.0.0 release candidate, 2026-05-28. Automated baseline: 379 Rust tests + 97 frontend tests = 476 passed.
 
 ## 1. Automated Preflight
 
@@ -23,7 +23,7 @@ cargo fmt --check
 Expected:
 
 - Frontend: 8 files, 97 tests passed.
-- Rust: 369 tests passed.
+- Rust: 379 tests passed.
 - No clippy warnings.
 
 ## 2. Desktop Smoke Test
@@ -76,6 +76,11 @@ Check from chat or developer mode:
 - Tool list includes builtins, MCP-related tools, and community plugin surfaces.
 - `fairy.execute_tool` returns a real tool result rather than a stub.
 - Unsafe shell commands are blocked by the command guard.
+- Asking for Chinese weather such as `澳门天气` returns a weather result or a clear weather-source fallback, never a panic.
+- After search/fetch/weather completes, the chat shows the tool result directly and the status badge returns to idle.
+- Asking `web_fetch` for a public page returns text within the tool timeout.
+- `web_fetch` rejects localhost, private IPs, unsupported schemes, and unsafe redirects.
+- Large web pages are capped and marked as truncated instead of blocking the agent loop.
 
 ## 6. Release Gate
 

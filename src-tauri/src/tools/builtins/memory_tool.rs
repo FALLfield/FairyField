@@ -4,6 +4,7 @@
 //! 支持 mock 模式（new()）和真实 MemoryLayers 访问（with_layers()）。
 
 use crate::memory::MemoryLayers;
+use crate::text::truncate_chars;
 use crate::tools::executor::{Tool, ToolError};
 use serde::Deserialize;
 use std::pin::Pin;
@@ -269,7 +270,7 @@ impl Tool for MemorySaveTool {
             None => Box::pin(async move {
                 Ok(format!(
                     "[memory_save mock] 已保存 '{}' 分类为 '{}'",
-                    &params.content[..params.content.len().min(50)],
+                    truncate_chars(&params.content, 50),
                     params.category
                 ))
             }),

@@ -6,6 +6,7 @@
 //! L3: Full Recall — 完整 drawer 内容（按需检索）
 
 use super::store::{Drawer, MemoryStore};
+use crate::text::truncate_chars_with_suffix;
 use serde::{Deserialize, Serialize};
 
 /// Wake-up 上下文（L0 + L1 + L2 索引）
@@ -39,13 +40,13 @@ impl MemoryLayers {
             .unwrap_or_else(|| "我是 Fairy，你的桌面 AI 伴侣。".to_string());
 
         let working_summary = self
-            .store
-            .get_meta("working_summary")
+            .derive_working_summary()
+            .or_else(|| self.store.get_meta("working_summary"))
             .unwrap_or_else(|| "（暂无近期对话摘要）".to_string());
 
         let palace_index = self
-            .store
-            .get_meta("palace_index")
+            .derive_palace_index()
+            .or_else(|| self.store.get_meta("palace_index"))
             .unwrap_or_else(|| "（暂无记忆索引）".to_string());
 
         let estimated_tokens = (identity.chars().count()
@@ -84,9 +85,50 @@ impl MemoryLayers {
         self.store.get_drawers_by_wing(wing, limit)
     }
 
+    /// 按 wing + room 查询
+    pub fn recall_room(&self, wing: &str, room: &str, limit: usize) -> Result<Vec<Drawer>, String> {
+        self.store.get_drawers_by_room(wing, room, limit)
+    }
+
     /// 设置元数据（L0-L2 层）
     pub fn set_meta(&self, key: &str, value: &str, layer: i32) -> Result<(), String> {
         self.store.set_meta(key, value, layer)
+    }
+
+    fn derive_working_summary(&self) -> Option<String> {
+        let drawers = self.store.get_top_drawers(6).ok()?;
+        if drawers.is_empty() {
+            return None;
+        }
+
+        let lines = drawers
+            .iter()
+            .map(|drawer| {
+                format!(
+                    "- [{}/{}/{}] {}",
+                    drawer.wing,
+                    drawer.room,
+                    drawer.category,
+                    truncate_chars_with_suffix(&drawer.content, 120, "...")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(format!("重要记忆摘要：\n{lines}"))
+    }
+
+    fn derive_palace_index(&self) -> Option<String> {
+        let counts = self.store.get_room_counts(16).ok()?;
+        if counts.is_empty() {
+            return None;
+        }
+
+        let lines = counts
+            .iter()
+            .map(|(wing, room, count)| format!("- {wing}/{room}: {count} 条记忆"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(format!("记忆宫殿索引：\n{lines}"))
     }
 }
 
@@ -116,5 +158,32 @@ mod tests {
         let results = layers.search("programming", 10).unwrap();
         assert!(!results.is_empty());
         assert!(results[0].content.contains("programming"));
+    }
+
+    #[test]
+    fn wake_up_derives_summary_and_index_from_drawers() {
+        let layers = make_layers();
+        layers
+            .add_drawer("I love programming in Rust", "daily", "hobbies", "tech")
+            .unwrap();
+
+        let ctx = layers.wake_up().unwrap();
+        assert!(ctx.working_summary.contains("programming"));
+        assert!(ctx.palace_index.contains("daily/hobbies"));
+    }
+
+    #[test]
+    fn recall_room_filters_by_wing_and_room() {
+        let layers = make_layers();
+        layers
+            .add_drawer("工作 A", "work", "notes", "tech")
+            .unwrap();
+        layers
+            .add_drawer("生活 A", "daily", "notes", "life")
+            .unwrap();
+
+        let work_notes = layers.recall_room("work", "notes", 10).unwrap();
+        assert_eq!(work_notes.len(), 1);
+        assert_eq!(work_notes[0].content, "工作 A");
     }
 }

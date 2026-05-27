@@ -10,6 +10,7 @@ use crate::llm::{
 };
 use crate::memory::miner::ConversationMiner;
 use crate::memory::MemoryLayers;
+use crate::text::truncate_chars;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -614,18 +615,29 @@ impl PrimaryAgent {
         // 提取值避免 &self 跨 await 借用
         let provider = self.provider.clone();
         let toolset = self.toolset.clone();
+        let mut last_tool_results: Vec<(String, String)> = Vec::new();
 
         for _round in 1..=max_rounds {
             if let Some(handle) = &emit_handle {
                 let _ = handle.emit("agent:status", "thinking");
             }
 
-            let response = provider
+            let response = match provider
                 .chat_with_tools(messages.clone(), config.clone(), tools.clone())
-                .await?;
+                .await
+            {
+                Ok(response) => response,
+                Err(_err) if !last_tool_results.is_empty() => {
+                    return Ok(format_tool_result_fallback(&last_tool_results));
+                }
+                Err(err) => return Err(err),
+            };
 
             match response {
                 LlmResponse::Text(text) => {
+                    if text.trim().is_empty() && !last_tool_results.is_empty() {
+                        return Ok(format_tool_result_fallback(&last_tool_results));
+                    }
                     return Ok(text);
                 }
                 LlmResponse::ToolCalls { calls, text: _ } => {
@@ -650,9 +662,10 @@ impl PrimaryAgent {
                                 Ok(output) => output,
                                 Err(e) => format!("Tool error: {}", e),
                             };
+                            last_tool_results.push((call.name.clone(), result_text.clone()));
 
                             if let Some(handle) = &emit_handle {
-                                let truncated = &result_text[..result_text.len().min(500)];
+                                let truncated = truncate_chars(&result_text, 500);
                                 let _ = handle.emit(
                                     "agent:tool_log",
                                     serde_json::json!({
@@ -670,6 +683,10 @@ impl PrimaryAgent {
                                 tool_calls: None,
                             });
                         }
+
+                        if should_return_tool_results_directly(&last_tool_results) {
+                            return Ok(format_tool_result_fallback(&last_tool_results));
+                        }
                     }
                     // 继续循环 — LLM 会看到工具结果
                 }
@@ -680,7 +697,16 @@ impl PrimaryAgent {
         if let Some(handle) = &emit_handle {
             let _ = handle.emit("agent:status", "thinking");
         }
-        provider.chat(messages, config).await
+        match provider.chat(messages, config).await {
+            Ok(text) if text.trim().is_empty() && !last_tool_results.is_empty() => {
+                Ok(format_tool_result_fallback(&last_tool_results))
+            }
+            Ok(text) => Ok(text),
+            Err(_err) if !last_tool_results.is_empty() => {
+                Ok(format_tool_result_fallback(&last_tool_results))
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// 后处理：挖掘对话提取新记忆
@@ -742,11 +768,10 @@ impl PrimaryAgent {
             .find(|m| m.role == MessageRole::User)
             .map(|m| m.content.clone());
         if let Some(user_content) = last_user_msg {
-            let truncated: String = user_content.chars().take(500).collect();
             // 仅当内容有一定长度时才保存，避免空消息污染记忆库
-            if truncated.len() > 5 {
+            if user_content.trim().chars().count() > 5 {
                 if let Err(e) = miner_guard.store.save_drawer(
-                    &truncated,
+                    &user_content,
                     "daily",
                     "conversation",
                     "fallback",
@@ -897,6 +922,28 @@ pub async fn agent_clear_history(state: State<'_, AgentState>) -> Result<(), Str
 }
 
 // ========== 工具函数 ==========
+
+fn format_tool_result_fallback(results: &[(String, String)]) -> String {
+    let mut sections = Vec::new();
+    for (tool, result) in results {
+        sections.push(format!(
+            "工具 `{}` 返回：\n{}",
+            tool,
+            truncate_chars(result, 2_000)
+        ));
+    }
+    sections.join("\n\n")
+}
+
+fn should_return_tool_results_directly(results: &[(String, String)]) -> bool {
+    !results.is_empty()
+        && results.iter().all(|(tool, _)| {
+            matches!(
+                tool.as_str(),
+                "web_search" | "web_fetch" | "weather" | "github" | "git"
+            )
+        })
+}
 
 /// 获取当前时间戳（毫秒）
 fn current_timestamp() -> i64 {

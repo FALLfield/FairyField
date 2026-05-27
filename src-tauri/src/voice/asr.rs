@@ -193,7 +193,7 @@ impl AsrEngine for SherpaOnnxAsr {
         if cfg!(feature = "sherpa-onnx") {
             "sherpa-onnx-paraformer"
         } else {
-            "sherpa-onnx-paraformer (stub)"
+            "mock-asr-fallback"
         }
     }
 }

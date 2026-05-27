@@ -29,6 +29,7 @@ pub mod mcp;
 pub mod memory;
 pub mod plugins;
 pub mod security;
+pub mod text;
 pub mod tools;
 pub mod voice;
 
@@ -69,11 +70,11 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-// ---------- 语音命令（voice Agent stub，等 Phase 2 真正实现） ----------
+// ---------- 语音命令 ----------
 
 /// 启动语音识别
 ///
-/// Phase 2 stub：开始监听麦克风并进行语音识别。
+/// 使用当前 VoicePipeline 执行一次 ASR。实时麦克风捕获由 voice/audio_input 模块处理。
 /// 语音管道状态
 struct VoiceState {
     pipeline: tokio::sync::Mutex<VoicePipeline>,
@@ -113,7 +114,7 @@ async fn voice_start_tts(
 
 /// 获取语音活动检测状态
 ///
-/// Phase 2 stub：返回当前是否检测到语音活动。
+/// 返回当前是否检测到语音活动。
 #[tauri::command]
 async fn voice_get_vad_state(state: tauri::State<'_, VoiceState>) -> Result<bool, String> {
     let pipeline = state.pipeline.lock().await;
@@ -174,14 +175,16 @@ async fn set_ignore_cursor_events(window: tauri::Window, ignore: bool) -> Result
 // 保留旧的 command 名称以免前端崩溃，内部委托给新实现。
 
 #[tauri::command]
-async fn chat(message: String) -> Result<String, String> {
-    // Phase 0-1 兼容：返回简单文本（不经过 AgentState）
-    Ok(format!("(Phase 2 stub) 收到消息: {}", message))
+async fn chat(message: String, state: tauri::State<'_, AgentState>) -> Result<String, String> {
+    // Phase 0-1 兼容：旧前端只需要 reply 字符串，新路径仍走真实 Agent。
+    let response = agent_chat(message, state).await?;
+    Ok(response.reply)
 }
 
 #[tauri::command]
-async fn get_emotion_state() -> Emotion {
-    Emotion::Neutral
+async fn get_emotion_state(state: tauri::State<'_, AgentState>) -> Result<Emotion, String> {
+    let emotion = agent_get_emotion(state).await?;
+    Ok(emotion.to_emotion())
 }
 
 #[tauri::command]
@@ -548,7 +551,7 @@ pub fn run() {
             // Coding Agent 命令（Phase 6）
             agent::coding_agent::coding_agent_list,
             agent::coding_agent::coding_agent_dispatch,
-            // 语音命令（platform stub）
+            // 语音命令
             voice_start_asr,
             voice_start_tts,
             voice_get_vad_state,
@@ -640,7 +643,7 @@ pub fn run() {
             }
         })
         .manage({
-            // 创建语音管道（使用 Mock 引擎，无需模型文件）
+            // 创建轻量语音管道；未启用 sherpa-onnx/模型时使用安全 fallback。
             let pipeline = VoicePipeline::new_mock().expect("Failed to create VoicePipeline");
             VoiceState {
                 pipeline: tokio::sync::Mutex::new(pipeline),
