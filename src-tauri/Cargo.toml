@@ -13,6 +13,7 @@ repository = "https://github.com/fallfield/FairyField"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "fairyfield_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+doctest = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
