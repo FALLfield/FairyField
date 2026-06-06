@@ -72,11 +72,12 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 
 ### 待后续（Phase 7+）
 
-1. **全息模式** — 透视追踪（MediaPipe Face Mesh）和真实硬件适配。
-2. **Discord Bot 完整集成** — serenity Bot Token 配置、手机端交互闭环。
-3. **更多第三方服务深集成** — Notion/Gmail/Calendar/Linear/Slack 的真实 OAuth API 测试。
-4. **桌面端人工验收** — `npm run tauri dev` 下麦克风权限、透明窗口、置顶和模型交互完整验收。
-5. **发布流水线扩展** — macOS 签名、公证、安装包产物和 GitHub Release 自动化。
+1. **流式语音体验** — ASR partial、LLM token queue、首句 TTS、口型同步和延迟遥测。
+2. **语音质量修复** — Matcha/Kokoro/Paraformer/Silero 模型健康检查、TTS 清洗测试和语音设置 UI。
+3. **Hermes 级工具扩展** — 全工具 smoke harness、MCP 双向导入导出、权限 UI 和日常工具优先级。
+4. **UI 精修** — compact/expanded chat、voice-call mode、模型状态和 motion-safe 设置。
+5. **XR/全息路径** — 桌面视差、Pepper's ghost 原型、多视图实验和硬件 BOM。
+6. **市场与 HCI 研究** — 详见 `docs/ROADMAP_PHASE7.md` 的市场定位、商业验证和研究方向。
 
 ## Development Phases
 
@@ -371,6 +372,7 @@ Backend (Rust / Tauri v2)
 - `PROJECT_STRUCTURE.md` — 目录和模块索引
 - `CHANGELOG.md` — 发布记录
 - `docs/USAGE_GUIDE.md` — 用户使用指南
+- `docs/ROADMAP_PHASE7.md` — Phase 7 路线图：流式语音、工具、UI、XR、市场、HCI 研究
 - `docs/DISCORD_SETUP.md` — Discord 网关配置
 - `src-tauri/tauri.conf.json` — Tauri 窗口配置
 - `soul/SOUL.md` — Fairy 的性格、价值观、说话风格（Phase 2 创建）

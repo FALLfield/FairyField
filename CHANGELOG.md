@@ -27,6 +27,7 @@ All notable changes to FairyField will be documented in this file.
 - OnboardingWizard: 4-step first-time setup (name, call preference, personality, LLM config)
 - Shared AgentMemory backend for external agents and MCP adapters
 - Community plugin manifest loader, Composio catalog scaffolding, and Phase 6 integration tool surfaces
+- Phase 7 roadmap covering streaming voice, multilingual TTS reliability, Hermes-scale tools, UI refinement, XR prototype path, market position, and HCI research directions
 
 ### Changed
 - Default offline TTS preference changed from Kokoro-only to Matcha bilingual, with Kokoro and macOS `say` as fallbacks

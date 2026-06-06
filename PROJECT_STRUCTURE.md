@@ -34,6 +34,8 @@ FairyField/
 │   └── models/default/          # Default GLB character asset
 ├── config/default.json          # Public default config template
 ├── docs/                        # User-facing setup guides
+│   ├── LOCAL_TTS.md             # Local Matcha/Kokoro voice strategy
+│   └── ROADMAP_PHASE7.md        # Next-step product, XR, market, and HCI plan
 ├── plugins/                     # Example plugin manifests
 ├── scripts/                     # Model download helpers
 ├── soul/                        # Fairy personality and identity prompts
