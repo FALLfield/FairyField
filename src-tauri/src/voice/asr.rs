@@ -98,15 +98,10 @@ fn asr_model_dir(config: &crate::config::settings::VoiceConfig) -> std::path::Pa
 /// 需要下载 Paraformer 模型文件才能启用（`cargo build --features sherpa-onnx`）。
 /// 未启用 feature 时回退到 MockAsr。
 ///
-/// *模型下载指引：https://k2-fsa.github.io/sherpa/onnx/pretrained_models/online-paraformer/paraformer-models.html*
+/// *模型下载指引：https://k2-fsa.github.io/sherpa/onnx/pretrained_models/offline-paraformer/index.html*
 pub struct SherpaOnnxAsr {
     #[cfg(feature = "sherpa-onnx")]
-    inner: Option<
-        std::sync::Mutex<(
-            sherpa_onnx::online_recognizer::OnlineRecognizer,
-            sherpa_onnx::online_recognizer::OnlineStream,
-        )>,
-    >,
+    inner: Option<std::sync::Mutex<sherpa_onnx::OfflineRecognizer>>,
     #[cfg(not(feature = "sherpa-onnx"))]
     fallback: MockAsr,
 }
@@ -114,30 +109,30 @@ pub struct SherpaOnnxAsr {
 impl SherpaOnnxAsr {
     #[cfg(feature = "sherpa-onnx")]
     pub fn new(model_dir: std::path::PathBuf) -> Result<Self, AsrError> {
-        use sherpa_onnx::online_recognizer::{
-            OnlineModelConfig, OnlineParaformerModelConfig, OnlineRecognizer,
-            OnlineRecognizerConfig,
+        use sherpa_onnx::{
+            OfflineModelConfig, OfflineParaformerModelConfig, OfflineRecognizer,
+            OfflineRecognizerConfig,
         };
 
-        let config = OnlineRecognizerConfig {
-            model_config: OnlineModelConfig {
-                paraformer: OnlineParaformerModelConfig {
-                    model: model_dir.join("model.onnx").to_string_lossy().to_string(),
-                    ..Default::default()
+        let config = OfflineRecognizerConfig {
+            model_config: OfflineModelConfig {
+                paraformer: OfflineParaformerModelConfig {
+                    model: Some(model_dir.join("model.onnx").to_string_lossy().to_string()),
                 },
+                tokens: Some(model_dir.join("tokens.txt").to_string_lossy().to_string()),
+                provider: Some("cpu".to_string()),
+                num_threads: 2,
                 ..Default::default()
             },
+            decoding_method: Some("greedy_search".to_string()),
             ..Default::default()
         };
 
-        let recognizer = OnlineRecognizer::new(config)
-            .map_err(|e| AsrError::Config(format!("ASR 初始化失败: {}", e)))?;
-        let stream = recognizer
-            .create_stream()
-            .map_err(|e| AsrError::Config(format!("流创建失败: {}", e)))?;
+        let recognizer = OfflineRecognizer::create(&config)
+            .ok_or_else(|| AsrError::Config("ASR 初始化失败".to_string()))?;
 
         Ok(Self {
-            inner: Some(std::sync::Mutex::new((recognizer, stream))),
+            inner: Some(std::sync::Mutex::new(recognizer)),
         })
     }
 
@@ -151,32 +146,23 @@ impl SherpaOnnxAsr {
 
 impl AsrEngine for SherpaOnnxAsr {
     #[cfg(feature = "sherpa-onnx")]
-    fn recognize(&self, samples: &[f32], _sample_rate: u32) -> Result<AsrResult, AsrError> {
+    fn recognize(&self, samples: &[f32], sample_rate: u32) -> Result<AsrResult, AsrError> {
         let inner = self
             .inner
             .as_ref()
             .ok_or_else(|| AsrError::Config("ASR 引擎未初始化".into()))?;
-        let mut guard = inner
+        let recognizer = inner
             .lock()
             .map_err(|e| AsrError::Recognition(format!("锁错误: {}", e)))?;
-        let (recognizer, stream) = &mut *guard;
 
-        stream
-            .accept_waveform(16000, samples)
-            .map_err(|e| AsrError::Recognition(format!("音频输入失败: {}", e)))?;
+        let stream = recognizer.create_stream();
+        stream.accept_waveform(sample_rate as i32, samples);
+        recognizer.decode(&stream);
 
-        while recognizer.is_ready(stream) {
-            recognizer
-                .decode(stream)
-                .map_err(|e| AsrError::Recognition(format!("解码失败: {}", e)))?;
-        }
-
-        let result = recognizer.get_result(stream);
-        let text = result.text.unwrap_or_default();
-
-        recognizer
-            .reset(stream)
-            .map_err(|e| AsrError::Recognition(format!("重置失败: {}", e)))?;
+        let text = stream
+            .get_result()
+            .map(|result| result.text)
+            .unwrap_or_default();
 
         Ok(AsrResult {
             text,

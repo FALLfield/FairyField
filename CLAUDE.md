@@ -17,7 +17,7 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 | AI 灵魂 | 原生 Function Calling | Agent Loop + LLM tool_use (OpenAI/Claude) |
 | LLM | 云端 API (OpenAI / Claude) | 质量优先，智能路由优化成本 |
 | ASR | sherpa-onnx (Paraformer) | 离线语音识别，Rust 原生绑定 |
-| TTS | sherpa-onnx (Kokoro) | 离线语音合成，纯 Rust |
+| TTS | sherpa-onnx (Matcha bilingual + Kokoro fallback) | 低延迟中英双语离线语音合成，纯 Rust |
 | VAD | sherpa-onnx (silero-vad) | 语音活动检测 |
 | 持久化 | rusqlite (SQLite + FTS5 + sqlite-vec) | 长期记忆 + 向量索引 + 知识图谱 |
 | 向量搜索 | sqlite-vec + ONNX Runtime | 本地 embedding，零 API 调用 |
@@ -40,8 +40,8 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 - ✅ v1 硬化已完成：Web/weather 工具、网页抓取、UTF-8 截断、工具超时和 MemPalace 风格 wake-up/去重已补强。
 - ✅ 版本已统一到 `1.0.0`：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
 - ✅ 默认模型路径指向仓库内可用资源：`public/models/default/2031903848872972007.glb`。
-- ✅ 自动化测试：379 Rust + 97 Frontend = 476 tests passed。
-- ✅ 发布前验证命令：`npm run build`、`npm run test`、`cargo check`、`cargo test`、`cargo clippy -- -D warnings`、`cargo fmt --check`。
+- ✅ 自动化测试：382 Rust + 100 Frontend = 482 default tests passed；`sherpa-onnx` feature 下 384 Rust tests passed。
+- ✅ 发布前验证命令：`npm run build`、`npm run test`、`cargo fmt --check`、`cargo check`、`cargo test`、`cargo clippy -- -D warnings`、`cargo check --features sherpa-onnx`、`cargo test --features sherpa-onnx`、`cargo clippy --features sherpa-onnx -- -D warnings`。
 
 ### Phase 6 完成项
 
@@ -82,7 +82,7 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 
 - **Phase 0**：架构重建 ✅ 已完成
 - **Phase 1**：核心交互 ✅ 已完成
-- **Phase 2**：语音管道 + 灵魂骨架 ✅ 基本完成（ASR/VAD/Kokoro 待模型文件）
+- **Phase 2**：语音管道 + 灵魂骨架 ✅ 已完成（ASR/VAD/Matcha/Kokoro 取决于本地模型文件）
 - **Phase 3**：智能系统 ✅ 已完成（Wave 1/2/3 + Agent Loop，248 测试通过）
 - **Phase 4**：成长 + 通信 ✅ 已完成（2026-04-28，248+93 测试通过）
 - **Phase 4.5**：收尾 ✅ 已完成（2026-05-07）— 流式回复/jieba分词/代码拆分/插件系统/ChatUI
@@ -322,7 +322,7 @@ Backend (Rust / Tauri v2)
   │   └── community/        #   JSON 社区插件加载器
   ├── voice/                # 语音管道 (sherpa-onnx)
   │   ├── asr.rs            #   Paraformer 语音识别
-  │   ├── tts.rs            #   Kokoro 语音合成
+  │   ├── tts.rs            #   Matcha/Kokoro 语音合成 + 文本清洗/分句
   │   └── vad.rs            #   silero-vad 检测
   ├── memory/               # 长期记忆 (MemPalace 架构)
   │   ├── store.rs          #   SQLite + FTS5 + sqlite-vec

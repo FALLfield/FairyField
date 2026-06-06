@@ -102,6 +102,7 @@ onMounted(async () => {
         expressionModule.bindEmotionEngine(emotionEngine);
 
         expressionModule.start();
+        lipSyncModule.start();
         eyeTrackModule.start();
         idleAnimation.start();
 
@@ -143,6 +144,7 @@ onMounted(async () => {
         ttsFinishUnlisten = await listen('tts-finished', () => {
             isTtsSpeaking = false;
             ttsMouthTime = 0;
+            lipSyncModule?.setSimulatedMouth(0, 0);
         }).catch(() => null as (() => void) | null);
 
         // 点击策略：角色上拖动窗口，透明区域短暂穿透

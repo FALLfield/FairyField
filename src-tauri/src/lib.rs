@@ -490,6 +490,7 @@ pub fn run() {
         tracing::warn!("配置文件加载失败，使用默认配置: {e}");
         default_config()
     });
+    let voice_config = config.voice.clone();
     let agent_config = agent::AgentConfig::default();
     let agent_config_for_state = agent_config.clone();
 
@@ -643,8 +644,14 @@ pub fn run() {
             }
         })
         .manage({
-            // 创建轻量语音管道；未启用 sherpa-onnx/模型时使用安全 fallback。
-            let pipeline = VoicePipeline::new_mock().expect("Failed to create VoicePipeline");
+            // 按用户配置创建真实语音管道；模型或音频设备不可用时再安全回退。
+            let pipeline = VoicePipeline::from_config(&voice_config)
+                .or_else(|e| {
+                    tracing::warn!("Voice: 配置语音管道初始化失败，回退到 mock 管道: {}", e);
+                    VoicePipeline::new_mock()
+                })
+                .expect("Failed to create VoicePipeline");
+            tracing::info!("Voice: TTS engine = {}", pipeline.tts_engine_name());
             VoiceState {
                 pipeline: tokio::sync::Mutex::new(pipeline),
             }

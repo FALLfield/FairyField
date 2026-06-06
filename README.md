@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Vue-3.5-green?logo=vue.js" alt="Vue">
   <img src="https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri" alt="Tauri">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
-  <img src="https://img.shields.io/badge/Tests-476%20passed-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-482%20passed-brightgreen" alt="Tests">
 </p>
 
 ## 为什么是 FairyField？
@@ -27,7 +27,7 @@
 | 模块 | 说明 |
 |------|------|
 | 🎭 **3D 角色** | VRM 模型 + 情绪驱动表情 + 口型同步 + 眼神跟随 |
-| 🎤 **离线语音** | Paraformer 语音识别 + Kokoro 语音合成 + Silero 语音检测 |
+| 🎤 **离线语音** | Paraformer 语音识别 + Matcha 中英双语低延迟 TTS + Kokoro 兜底 + Silero 语音检测 |
 | 🧠 **AI 灵魂** | Claude / GPT 驱动，自主工具调用，情感陪伴对话 |
 | 💬 **语音输入** | 点击麦克风说话，自动转文字 → AI 回复 → 语音朗读 |
 | 📝 **长期记忆** | 4 层记忆堆栈 + 时序知识图谱 + 向量语义搜索 |
@@ -66,7 +66,7 @@ export ANTHROPIC_API_KEY="sk-ant-your-key"
 bash scripts/download-models.sh
 ```
 
-不下载也可运行——TTS 回退到 macOS 系统语音，ASR 使用模拟引擎。
+默认下载 Matcha 中文女声 + 英文女声 + Paraformer + Silero VAD。不下载也可运行——TTS 回退到 Kokoro 或 macOS 系统语音，ASR 使用模拟引擎。
 
 ### 4. 启动
 
@@ -120,7 +120,7 @@ npm run tauri dev
 | 前端 | Vue 3 + TypeScript |
 | AI 对话 | OpenAI / Anthropic API |
 | 语音识别 | sherpa-onnx Paraformer |
-| 语音合成 | sherpa-onnx Kokoro |
+| 语音合成 | sherpa-onnx Matcha bilingual（默认）+ Kokoro fallback |
 | 语音检测 | sherpa-onnx Silero VAD |
 | 存储 | SQLite + FTS5 + sqlite-vec |
 | 知识图谱 | 时序三元组 |
@@ -131,11 +131,11 @@ npm run tauri dev
 ```bash
 npm run dev          # Vite 开发服务器
 npm run build        # 生产构建
-npm run test         # 前端测试 (97 tests)
+npm run test         # 前端测试
 
 cd src-tauri
 cargo check          # 编译检查
-cargo test           # Rust 测试 (379 tests)
+cargo test           # Rust 测试
 cargo clippy         # Lint
 ```
 
@@ -153,6 +153,10 @@ cargo clippy         # Lint
 | 文档 | 说明 |
 |------|------|
 | [用户指南](docs/USAGE_GUIDE.md) | 安装、配置、使用 |
+| [本地语音策略](docs/LOCAL_TTS.md) | Matcha/Kokoro 选择、延迟设计、模型安装 |
+| [架构说明](ARCHITECTURE.md) | v1 前端、后端、工具、记忆和语音架构 |
+| [项目结构](PROJECT_STRUCTURE.md) | 仓库目录职责 |
+| [人工测试清单](TEST_MANUAL.md) | v1 发布前手动验收 |
 | [Discord 配置](docs/DISCORD_SETUP.md) | 手机伴侣通知 |
 | [开发约定](CLAUDE.md) | 多 Agent 开发策略 |
 | [贡献指南](CONTRIBUTING.md) | 如何参与 |

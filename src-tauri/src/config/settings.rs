@@ -493,7 +493,7 @@ pub fn default_config() -> AppConfig {
         },
         voice: VoiceConfig {
             asr_model: "paraformer".to_string(),
-            tts_model: "kokoro".to_string(),
+            tts_model: "matcha".to_string(),
             vad_model: "silero-vad".to_string(),
             sample_rate: 16000,
             language: "zh".to_string(),

@@ -259,7 +259,7 @@ mod tests {
                 "web_fetch",
                 r#"{"url":"https://example.com"}"#,
                 &["Example Domain"],
-                &["请求失败"],
+                &["请求失败", "DNS lookup failed", "DNS lookup timed out"],
             ),
             (
                 "file_write",

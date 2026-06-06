@@ -51,8 +51,11 @@ Large downloaded ASR/TTS/VAD models are not committed. They are fetched with `sc
 Release verification for v1.0.0:
 
 - `npm run build`
-- `npm run test` — 97 frontend tests
+- `npm run test` — 100 frontend tests
 - `cargo check`
-- `cargo test` — 379 Rust tests
+- `cargo test` — 382 Rust tests
 - `cargo clippy -- -D warnings`
+- `cargo check --features sherpa-onnx`
+- `cargo test --features sherpa-onnx` — 384 Rust tests
+- `cargo clippy --features sherpa-onnx -- -D warnings`
 - `cargo fmt --check`

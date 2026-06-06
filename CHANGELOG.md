@@ -5,6 +5,9 @@ All notable changes to FairyField will be documented in this file.
 ## [1.0.0] — 2026-05-28
 
 ### Added
+- Low-latency Matcha bilingual TTS path: Chinese `matcha-icefall-zh-baker` + English `matcha-icefall-en_US-ljspeech`
+- Universal TTS text cleaner for markdown/code/emoji/URL/tool tags before any engine synthesizes
+- Sentence-level TTS chunking so long replies can start speaking from the first short sentence instead of waiting for full-message synthesis
 - Emotion/Chat UI separation: ControlPanel moved to top-left, default collapsed
 - Expression hotkey system: Ctrl+1~8 for manual expression triggers
 - ChatPanel autoScroll: pauses when user scrolls up, resumes at bottom
@@ -16,7 +19,7 @@ All notable changes to FairyField will be documented in this file.
 - Token compressor (TokenJuice-style: HTML to text, URL shortening, truncation)
 - Tools directory restructured: builtins/ (web, file_ops, shell, git, memory, obsidian)
 - Obsidian vault integration tool (search notes, read/write, walkdir traversal)
-- 127 new Rust tests (379 total), tools/mcp/rate_limit token bucket, and full built-in tool smoke coverage
+- 130 new Rust-side tests since the MVP baseline; default Rust suite is now 382 tests, with 384 tests under `sherpa-onnx`
 - User configuration system (config/user.rs, ~/.fairyfield/user.json)
 - Coding Agent Manager (Claude Code/KiloCode/OpenCode CLI subprocess support)
 - GitHub API integration tool
@@ -26,13 +29,15 @@ All notable changes to FairyField will be documented in this file.
 - Community plugin manifest loader, Composio catalog scaffolding, and Phase 6 integration tool surfaces
 
 ### Changed
+- Default offline TTS preference changed from Kokoro-only to Matcha bilingual, with Kokoro and macOS `say` as fallbacks
+- `scripts/download-models.sh` now downloads Matcha bilingual models by default and makes Kokoro optional via `--kokoro`
 - Emotion buttons removed from ControlPanel (now AI-driven + hotkeys)
 - ControlPanel z-index: 200-300, position: bottom-right to top-left
 - ChatHistory gap: 6px-10px, consecutive same-role messages grouped
 - Tool directory: flat tools/ to tools/builtins/ + tools/mcp/ + tools/community/
 - MCP Server: 3 tools to 5 tools (added execute_tool + get_context)
 - Release metadata aligned for GitHub v1 publication
-- Release verification now covers 476 automated tests (379 Rust + 97 Frontend)
+- Release verification now covers 482 default automated tests (382 Rust + 100 Frontend), plus 384 Rust tests under `sherpa-onnx`
 - Memory wake-up now derives L1 summaries and L2 palace indexes from stored drawers before falling back to static metadata
 - Memory saves now skip normalized exact duplicates in the same wing/room, and fallback conversation mining stores user text verbatim instead of truncating it
 

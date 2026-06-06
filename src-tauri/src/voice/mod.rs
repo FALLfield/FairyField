@@ -137,6 +137,11 @@ impl VoicePipeline {
         tts.stop();
     }
 
+    /// 获取当前 TTS 引擎名称。
+    pub fn tts_engine_name(&self) -> String {
+        self.tts.blocking_lock().engine_name().to_string()
+    }
+
     /// 获取当前 VAD 状态
     pub fn vad_state(&self) -> bool {
         self.vad_state == VadState::Speech

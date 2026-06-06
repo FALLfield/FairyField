@@ -21,7 +21,7 @@ cd FairyField/FairyField
 # 安装前端依赖
 npm install
 
-# 下载语音模型（可选，~550MB）
+# 下载语音模型（可选；默认安装低延迟 Matcha 双语模型）
 bash scripts/download-models.sh
 
 # 配置 LLM API
@@ -75,7 +75,8 @@ FairyField 支持离线语音处理：
 
 | 引擎 | 类型 | 状态 | 需要模型 |
 |------|------|------|----------|
-| Kokoro | TTS（文字→语音） | ✅ 支持 | `kokoro.onnx` + `voices.bin` |
+| Matcha bilingual | TTS（文字→语音） | ✅ 默认 | 中文 `matcha-icefall-zh-baker` + 英文 `matcha-icefall-en_US-ljspeech` + `vocos-22khz-univ.onnx` |
+| Kokoro | TTS（文字→语音） | ✅ 兜底 | `model.onnx` + `voices.bin` + lexicon/rule FST |
 | Paraformer | ASR（语音→文字） | ✅ 支持 | `sherpa-onnx-paraformer-zh` 目录 |
 | Silero VAD | 语音活动检测 | ✅ 支持 | `silero-vad.onnx` |
 | MacSayTts | TTS（仅 macOS） | ✅ 内置 | 无需模型 |
@@ -86,7 +87,9 @@ cd src-tauri
 cargo build --features sherpa-onnx
 ```
 
-不启用 `sherpa-onnx` feature 时，TTS 回退到 macOS `say` 命令，ASR/VAD 使用 Mock 引擎。
+不启用 `sherpa-onnx` feature 时，TTS 回退到 macOS `say` 命令，ASR/VAD 使用 Mock 引擎。启用后默认优先 Matcha 双语低延迟 TTS；缺少 Matcha 模型时回退到 Kokoro，再回退到平台默认。
+
+更多本地语音方案、延迟原因和模型选择见 `docs/LOCAL_TTS.md`。
 
 ### 角色模型
 

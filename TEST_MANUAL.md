@@ -1,6 +1,6 @@
 # FairyField Manual Test Checklist
 
-> v1.0.0 release candidate, 2026-05-28. Automated baseline: 379 Rust tests + 97 frontend tests = 476 passed.
+> v1.0.0 release candidate, verified 2026-06-06. Automated baseline: 382 Rust tests + 100 frontend tests = 482 passed. With `sherpa-onnx`, the Rust suite has 384 tests.
 
 ## 1. Automated Preflight
 
@@ -18,13 +18,16 @@ cargo check
 cargo test
 cargo clippy -- -D warnings
 cargo fmt --check
+cargo check --features sherpa-onnx
+cargo test --features sherpa-onnx
+cargo clippy --features sherpa-onnx -- -D warnings
 ```
 
 Expected:
 
-- Frontend: 8 files, 97 tests passed.
-- Rust: 379 tests passed.
-- No clippy warnings.
+- Frontend: 9 files, 100 tests passed.
+- Rust: 382 tests passed by default; 384 tests passed with `sherpa-onnx`.
+- No clippy warnings in default or `sherpa-onnx` builds.
 
 ## 2. Desktop Smoke Test
 
@@ -64,7 +67,7 @@ With models installed under `~/.fairyfield/models/`:
 - Microphone permission prompt appears on first use.
 - VAD detects speech start/stop.
 - ASR returns recognized text into the chat input.
-- TTS plays the assistant reply.
+- Matcha bilingual TTS plays the assistant reply when models are installed; Kokoro and macOS voice remain fallbacks.
 - Missing models fall back cleanly without crashing text chat.
 
 ## 5. Memory And Tools

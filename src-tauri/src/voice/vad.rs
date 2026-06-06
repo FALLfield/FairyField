@@ -104,7 +104,7 @@ fn vad_model_path(config: &crate::config::settings::VoiceConfig) -> std::path::P
 /// *模型下载指引：https://github.com/k2-fsa/sherpa-onnx/releases*
 pub struct SileroVad {
     #[cfg(feature = "sherpa-onnx")]
-    inner: Option<std::sync::Mutex<sherpa_onnx::vad::VoiceActivityDetector>>,
+    inner: Option<std::sync::Mutex<sherpa_onnx::VoiceActivityDetector>>,
     #[cfg(not(feature = "sherpa-onnx"))]
     fallback: MockVad,
 }
@@ -112,22 +112,25 @@ pub struct SileroVad {
 impl SileroVad {
     #[cfg(feature = "sherpa-onnx")]
     pub fn new(model_path: std::path::PathBuf) -> Result<Self, VadError> {
-        use sherpa_onnx::vad::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
+        use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 
         let config = VadModelConfig {
             silero_vad: SileroVadModelConfig {
-                model: model_path.to_string_lossy().to_string(),
+                model: Some(model_path.to_string_lossy().to_string()),
                 threshold: 0.5,
                 min_silence_duration: 0.5,
                 min_speech_duration: 0.25,
+                window_size: 512,
                 max_speech_duration: 15.0,
-                ..Default::default()
             },
+            sample_rate: 16000,
+            num_threads: 1,
+            provider: Some("cpu".to_string()),
             ..Default::default()
         };
 
-        let vad = VoiceActivityDetector::new(config, 20)
-            .map_err(|e| VadError::Detection(format!("VAD 初始化失败: {}", e)))?;
+        let vad = VoiceActivityDetector::create(&config, 20.0)
+            .ok_or_else(|| VadError::Detection("VAD 初始化失败".to_string()))?;
 
         Ok(Self {
             inner: Some(std::sync::Mutex::new(vad)),
@@ -149,14 +152,13 @@ impl VadEngine for SileroVad {
             .inner
             .as_ref()
             .ok_or_else(|| VadError::Detection("VAD 引擎未初始化".into()))?;
-        let mut vad = inner
+        let vad = inner
             .lock()
             .map_err(|e| VadError::Detection(format!("锁错误: {}", e)))?;
 
-        vad.accept_waveform(samples)
-            .map_err(|e| VadError::Detection(format!("VAD 音频输入失败: {}", e)))?;
+        vad.accept_waveform(samples);
 
-        Ok(if vad.is_detected() {
+        Ok(if vad.detected() {
             VadState::Speech
         } else {
             VadState::Silence

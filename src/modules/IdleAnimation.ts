@@ -16,6 +16,16 @@ interface BoneState {
   baseRotation: { x: number; y: number; z: number };
 }
 
+type GestureKind = 'nod' | 'lean' | 'shoulder' | 'hand';
+
+interface GestureState {
+  kind: GestureKind;
+  elapsed: number;
+  duration: number;
+  strength: number;
+  direction: 1 | -1;
+}
+
 /** 手臂从 T-Pose 放到自然下垂的角度（~70°） */
 const ARM_DOWN_Z = 1.2;
 /** 手肘微弯角度 */
@@ -28,6 +38,8 @@ export class IdleAnimation {
   private vrm: VRM | null = null;
   private time = 0;
   private running = false;
+  private nextGestureAt = 0;
+  private gesture: GestureState | null = null;
 
   // 躯干
   private spine: BoneState | null = null;
@@ -68,6 +80,8 @@ export class IdleAnimation {
 
     this.running = true;
     this.time = 0;
+    this.gesture = null;
+    this.nextGestureAt = this.randomRange(1.2, 3.0);
   }
 
   stop(): void {
@@ -81,17 +95,20 @@ export class IdleAnimation {
     this.time += delta;
 
     // === 手臂：从 T-Pose 放到自然下垂 ===
+    const gesture = this.updateGesture(delta);
     const armIdleSway = Math.sin(this.time * 1.8 + 0.3) * 0.02;
     const armBreathSway = Math.sin(this.time * 1.8) * 0.5 + 0.5;
+    const handLift = gesture.kind === 'hand' ? gesture.amount * 0.16 * gesture.direction : 0;
+    const shoulderShift = gesture.kind === 'shoulder' ? gesture.amount * 0.04 * gesture.direction : 0;
 
     // 左臂：正 Z 旋转从 T-Pose 向下（VRM normalized bone 方向）
     this.applyBone(this.leftUpperArm, {
-      z: ARM_DOWN_Z + armIdleSway,
+      z: ARM_DOWN_Z + armIdleSway - handLift,
       x: ARM_FORWARD_X + armBreathSway * 0.01,
     });
     // 右臂：负 Z 旋转从 T-Pose 向下
     this.applyBone(this.rightUpperArm, {
-      z: -ARM_DOWN_Z - armIdleSway,
+      z: -ARM_DOWN_Z - armIdleSway - handLift,
       x: ARM_FORWARD_X + armBreathSway * 0.01,
     });
 
@@ -108,17 +125,22 @@ export class IdleAnimation {
 
     // === 呼吸：胸腹起伏，周期 ~3.5 秒 ===
     const breathe = Math.sin(this.time * 1.8) * 0.5 + 0.5;
-    this.applyBone(this.chest, { x: breathe * 0.02 });
-    this.applyBone(this.upperChest, { x: breathe * 0.015 });
+    const nod = gesture.kind === 'nod' ? gesture.amount * 0.045 : 0;
+    const lean = gesture.kind === 'lean' ? gesture.amount * 0.035 * gesture.direction : 0;
+    this.applyBone(this.chest, { x: breathe * 0.02 + nod * 0.25, z: shoulderShift });
+    this.applyBone(this.upperChest, { x: breathe * 0.015, y: lean });
 
     // === 身体微晃：缓慢左右摇摆，周期 ~6 秒 ===
     const sway = Math.sin(this.time * 1.05);
-    this.applyBone(this.hips, { z: sway * 0.008, y: sway * 0.004 });
-    this.applyBone(this.spine, { z: -sway * 0.006 });
+    this.applyBone(this.hips, {
+      z: sway * 0.008 - shoulderShift * 0.45,
+      y: sway * 0.004 - lean * 0.35,
+    });
+    this.applyBone(this.spine, { z: -sway * 0.006 + shoulderShift * 0.55 });
 
     // === 头部微动：缓慢自然偏转 ===
-    const headYaw = Math.sin(this.time * 0.7) * 0.015;
-    const headPitch = Math.sin(this.time * 0.5 + 1.0) * 0.008;
+    const headYaw = Math.sin(this.time * 0.7) * 0.015 + lean * 1.3;
+    const headPitch = Math.sin(this.time * 0.5 + 1.0) * 0.008 + nod;
     this.applyBone(this.head, { y: headYaw, x: headPitch });
   }
 
@@ -138,6 +160,40 @@ export class IdleAnimation {
     state.bone.rotation.x = state.baseRotation.x + (offset.x ?? 0);
     state.bone.rotation.y = state.baseRotation.y + (offset.y ?? 0);
     state.bone.rotation.z = state.baseRotation.z + (offset.z ?? 0);
+  }
+
+  private updateGesture(delta: number): { kind: GestureKind | null; amount: number; direction: 1 | -1 } {
+    if (!this.gesture && this.time >= this.nextGestureAt) {
+      const kinds: GestureKind[] = ['nod', 'lean', 'shoulder', 'hand'];
+      this.gesture = {
+        kind: kinds[Math.floor(Math.random() * kinds.length)],
+        elapsed: 0,
+        duration: this.randomRange(0.8, 1.7),
+        strength: this.randomRange(0.65, 1.0),
+        direction: Math.random() > 0.5 ? 1 : -1,
+      };
+    }
+
+    if (!this.gesture) {
+      return { kind: null, amount: 0, direction: 1 };
+    }
+
+    this.gesture.elapsed += delta;
+    const progress = Math.min(1, this.gesture.elapsed / this.gesture.duration);
+    const amount = Math.sin(progress * Math.PI) * this.gesture.strength;
+    const kind = this.gesture.kind;
+    const direction = this.gesture.direction;
+
+    if (progress >= 1) {
+      this.gesture = null;
+      this.nextGestureAt = this.time + this.randomRange(2.5, 6.0);
+    }
+
+    return { kind, amount, direction };
+  }
+
+  private randomRange(min: number, max: number): number {
+    return min + Math.random() * (max - min);
   }
 
   private resetAllBones(): void {
