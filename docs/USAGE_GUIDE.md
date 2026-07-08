@@ -116,6 +116,10 @@ public/models/default/
 - 可查看记忆库、工具调用日志和 Agent 状态
 - 三次点击角色头像也可切换
 
+### 文件工具
+
+Fairy 可以通过文件工具读写项目相对路径，也可以安全地写入你的桌面。支持的桌面路径形式包括 `Desktop/note.md`、`~/Desktop/note.md`、`$HOME/Desktop/note.md` 和 `/Users/you/Desktop/note.md`。绝对路径和 Home 路径会被限制在桌面目录内，避免误写系统目录。
+
 ### 多 Agent 开发闭环
 
 FairyField 提供 ManagerAgent、CodingAgent、TestingAgent、GoalAgent 四段式开发闭环。它会先规划任务和文件范围，再通过已配置的 coding CLI 执行真实改动，随后运行 allowlist 测试命令，最后由 GoalAgent 对照需求和证据判断是否完成。详情见 `docs/AGENT_LOOP.md`。

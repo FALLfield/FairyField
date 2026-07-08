@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Vue-3.5-green?logo=vue.js" alt="Vue">
   <img src="https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri" alt="Tauri">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
-  <img src="https://img.shields.io/badge/Tests-507%20passed-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-511%20passed-brightgreen" alt="Tests">
 </p>
 
 ## 为什么是 FairyField？

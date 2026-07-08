@@ -213,15 +213,15 @@ fn default_tools(kind: &SubAgentKind) -> Vec<String> {
         SubAgentKind::ToolExecutor => vec![
             "web_search".into(),
             "web_fetch".into(),
-            "read_file".into(),
-            "write_file".into(),
+            "file_read".into(),
+            "file_write".into(),
         ],
         SubAgentKind::Searcher => vec![
             "web_search".into(),
             "web_fetch".into(),
             "memory_search".into(),
         ],
-        SubAgentKind::Coder => vec!["read_file".into(), "write_file".into(), "terminal".into()],
+        SubAgentKind::Coder => vec!["file_read".into(), "file_write".into(), "terminal".into()],
     }
 }
 
@@ -266,6 +266,22 @@ mod tests {
             mgr.select_agent("帮我完成任务").unwrap().kind(),
             &SubAgentKind::ToolExecutor
         );
+    }
+
+    #[test]
+    fn default_agents_use_registered_file_tool_names() {
+        let mgr = DelegationManager::with_default_agents();
+        let tool_agent = mgr.find_by_kind(&SubAgentKind::ToolExecutor).unwrap();
+        assert!(tool_agent.allowed_tools().contains(&"file_read".into()));
+        assert!(tool_agent.allowed_tools().contains(&"file_write".into()));
+        assert!(!tool_agent.allowed_tools().contains(&"read_file".into()));
+        assert!(!tool_agent.allowed_tools().contains(&"write_file".into()));
+
+        let coder = mgr.find_by_kind(&SubAgentKind::Coder).unwrap();
+        assert!(coder.allowed_tools().contains(&"file_read".into()));
+        assert!(coder.allowed_tools().contains(&"file_write".into()));
+        assert!(!coder.allowed_tools().contains(&"read_file".into()));
+        assert!(!coder.allowed_tools().contains(&"write_file".into()));
     }
 
     #[tokio::test]

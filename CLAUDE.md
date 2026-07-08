@@ -41,7 +41,7 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 - ✅ v1 closure hardening 已完成：真实麦克风 ASR 捕获/重采样、TTS 开发文本清洗、Tools IPC/MCP 共享 Toolset、终端直执行安全收紧、Development Loop Git 证据门。
 - ✅ 版本已统一到 `1.0.0`：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
 - ✅ 默认模型路径指向仓库内可用资源：`public/models/default/2031903848872972007.glb`。
-- ✅ 自动化测试：405 Rust + 102 Frontend = 507 default tests passed；`sherpa-onnx` feature 下 407 Rust tests passed。
+- ✅ 自动化测试：409 Rust + 102 Frontend = 511 default tests passed；`sherpa-onnx` feature 下 411 Rust tests passed。
 - ✅ 发布前验证命令：`npm run build`、`npm run test`、`cargo fmt --check`、`cargo check`、`cargo test`、`cargo clippy -- -D warnings`、`cargo check --features sherpa-onnx`、`cargo test --features sherpa-onnx`、`cargo clippy --features sherpa-onnx -- -D warnings`。
 
 ### Phase 6 完成项

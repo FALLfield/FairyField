@@ -214,8 +214,8 @@ fn normalize_tool_id(tool_id: &str) -> String {
     match trimmed {
         "web.search" => "web_search".into(),
         "web.fetch" => "web_fetch".into(),
-        "file.read" => "file_read".into(),
-        "file.write" => "file_write".into(),
+        "file.read" | "read_file" => "file_read".into(),
+        "file.write" | "write_file" => "file_write".into(),
         "memory.search" => "memory_search".into(),
         "memory.save" => "memory_save".into(),
         "git.run" | "git.status" | "git.log" | "git.diff" => "git".into(),
@@ -297,6 +297,10 @@ mod tests {
     #[test]
     fn normalize_tool_ids() {
         assert_eq!(normalize_tool_id("web.search"), "web_search");
+        assert_eq!(normalize_tool_id("file.read"), "file_read");
+        assert_eq!(normalize_tool_id("file.write"), "file_write");
+        assert_eq!(normalize_tool_id("read_file"), "file_read");
+        assert_eq!(normalize_tool_id("write_file"), "file_write");
         assert_eq!(normalize_tool_id("github"), "github");
         assert_eq!(normalize_tool_id("github.list_issues"), "github");
         assert_eq!(normalize_tool_id("notion.search"), "notion");

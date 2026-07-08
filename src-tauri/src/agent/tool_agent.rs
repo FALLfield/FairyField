@@ -88,7 +88,7 @@ mod tests {
     use serde_json::json;
 
     fn sample_tools() -> Vec<String> {
-        vec!["web_search".into(), "read_file".into(), "write_file".into()]
+        vec!["web_search".into(), "file_read".into(), "file_write".into()]
     }
 
     #[test]
@@ -126,7 +126,7 @@ mod tests {
                 arguments: json!({}),
             },
             ToolCall {
-                tool_name: "read_file".into(),
+                tool_name: "file_read".into(),
                 arguments: json!({}),
             },
         ]);

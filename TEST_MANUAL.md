@@ -1,6 +1,6 @@
 # FairyField Manual Test Checklist
 
-> v1.0.0 release candidate, verified 2026-07-08. Automated baseline: 405 Rust tests + 102 frontend tests = 507 passed. With `sherpa-onnx`, the Rust suite has 407 tests.
+> v1.0.0 release candidate, verified 2026-07-08. Automated baseline: 409 Rust tests + 102 frontend tests = 511 passed. With `sherpa-onnx`, the Rust suite has 411 tests.
 
 ## 1. Automated Preflight
 
@@ -26,7 +26,7 @@ cargo clippy --features sherpa-onnx -- -D warnings
 Expected:
 
 - Frontend: 9 files, 102 tests passed.
-- Rust: 405 tests passed by default; 407 tests passed with `sherpa-onnx`.
+- Rust: 409 tests passed by default; 411 tests passed with `sherpa-onnx`.
 - No clippy warnings in default or `sherpa-onnx` builds.
 
 ## 2. Desktop Smoke Test
