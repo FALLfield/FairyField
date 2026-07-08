@@ -372,6 +372,7 @@ Backend (Rust / Tauri v2)
 - `PROJECT_STRUCTURE.md` — 目录和模块索引
 - `CHANGELOG.md` — 发布记录
 - `docs/USAGE_GUIDE.md` — 用户使用指南
+- `docs/AGENT_LOOP.md` — 多 Agent 开发闭环：Manager/Coding/Testing/Goal Agent 协作与安全门
 - `docs/ROADMAP_PHASE7.md` — Phase 7 路线图：流式语音、工具、UI、XR、市场、HCI 研究
 - `docs/DISCORD_SETUP.md` — Discord 网关配置
 - `src-tauri/tauri.conf.json` — Tauri 窗口配置

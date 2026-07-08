@@ -170,6 +170,241 @@ export interface UserConfig {
   created_at?: string | null;
 }
 
+export type LoopAgentRole =
+  | 'manager_agent'
+  | 'coding_agent'
+  | 'testing_agent'
+  | 'goal_agent';
+
+export type LoopStageStatus = 'planned' | 'skipped' | 'passed' | 'failed';
+export type AgentTaskStatus =
+  | 'queued'
+  | 'scoping'
+  | 'assigned'
+  | 'coding'
+  | 'testing'
+  | 'integration'
+  | 'blocked'
+  | 'complete';
+
+export interface LoopAgentPlan {
+  role: LoopAgentRole;
+  responsibility: string;
+  inputs: string[];
+  outputs: string[];
+}
+
+export interface AgentTask {
+  id: string;
+  goal_id: string;
+  role: LoopAgentRole;
+  owner: string;
+  scope: string;
+  files_allowed: string[];
+  files_forbidden: string[];
+  context_files: string[];
+  acceptance: string[];
+  status: AgentTaskStatus;
+  dependencies: string[];
+  risk: string;
+  logs: string[];
+  artifacts: string[];
+}
+
+export interface DevelopmentLoopPlan {
+  objective: string;
+  requirements: string[];
+  context_files: string[];
+  test_commands: string[];
+  max_iterations: number;
+  agents: LoopAgentPlan[];
+  tasks: AgentTask[];
+}
+
+export interface DevelopmentLoopRequest {
+  objective: string;
+  requirements: string[];
+  context_files: string[];
+  coding_agent?: string | null;
+  working_dir?: string | null;
+  test_commands: string[];
+  max_iterations?: number | null;
+  model?: string | null;
+  permission_mode?: string | null;
+  dry_run: boolean;
+}
+
+export interface LoopStageResult {
+  role: LoopAgentRole;
+  status: LoopStageStatus;
+  summary: string;
+  artifacts: string[];
+  duration_ms: number;
+}
+
+export interface AgentResult {
+  task_id: string;
+  role: LoopAgentRole;
+  status: LoopStageStatus;
+  summary: string;
+  changed_files: string[];
+  artifacts: string[];
+  duration_ms: number;
+}
+
+export interface DevelopmentLoopReport {
+  success: boolean;
+  dry_run: boolean;
+  iterations: number;
+  plan: DevelopmentLoopPlan;
+  stages: LoopStageResult[];
+  agent_results: AgentResult[];
+  unmet_requirements: string[];
+  next_actions: string[];
+}
+
+function buildPreviewDevelopmentLoopPlan(
+  objective: string,
+  requirements: string[],
+  contextFiles: string[],
+  testCommands: string[],
+  maxIterations?: number | null,
+): DevelopmentLoopPlan {
+  const normalizedRequirements = requirements.length > 0 ? requirements : [objective];
+  const normalizedTests =
+    testCommands.length > 0
+      ? testCommands
+      : ['npm run test', 'npm run build', 'cargo test'];
+  const owner = contextFiles.some((file) => file.startsWith('src-tauri/src/tools/'))
+    ? 'tools'
+    : contextFiles.some((file) => file.startsWith('src-tauri/src/voice/'))
+      ? 'voice'
+      : contextFiles.some((file) => file.startsWith('src/renderers/'))
+        ? 'renderer'
+        : contextFiles.length > 0
+          ? 'platform'
+          : 'integration';
+  const goalId = `goal-${objective
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .split('-')
+    .filter(Boolean)
+    .slice(0, 6)
+    .join('-') || 'development-loop'}`;
+  const forbidden = [
+    'files outside the selected working_dir',
+    'unrelated user changes',
+    'tracked secrets, API keys, or local model files',
+    'Tauri release build artifacts',
+  ];
+  return {
+    objective,
+    requirements: normalizedRequirements,
+    context_files: contextFiles,
+    test_commands: normalizedTests,
+    max_iterations: Math.min(Math.max(maxIterations ?? 1, 1), 3),
+    agents: [
+      {
+        role: 'manager_agent',
+        responsibility: 'Plan, assign, and coordinate the development loop.',
+        inputs: ['objective', 'requirements', 'context_files'],
+        outputs: ['DevelopmentLoopPlan'],
+      },
+      {
+        role: 'coding_agent',
+        responsibility: 'Operate the scoped coding task through a configured CLI.',
+        inputs: ['CodingTask'],
+        outputs: ['CodingResult'],
+      },
+      {
+        role: 'testing_agent',
+        responsibility: 'Run allowlisted verification commands and collect evidence.',
+        inputs: ['test_commands'],
+        outputs: ['test outputs'],
+      },
+      {
+        role: 'goal_agent',
+        responsibility: 'Audit requirements against coding and testing evidence.',
+        inputs: ['stage results', 'requirements'],
+        outputs: ['goal verdict'],
+      },
+    ],
+    tasks: [
+      {
+        id: 'manager-scope',
+        goal_id: goalId,
+        role: 'manager_agent',
+        owner: 'manager',
+        scope: 'Convert the objective into bounded coding, testing, and goal-audit work.',
+        files_allowed: ['planning metadata only'],
+        files_forbidden: forbidden,
+        context_files: contextFiles,
+        acceptance: [
+          'Plan contains manager, coding, testing, and goal agents.',
+          'Plan records owner, file scope, requirements, and verification commands.',
+        ],
+        status: 'scoping',
+        dependencies: [],
+        risk: 'low',
+        logs: [`objective: ${objective}`],
+        artifacts: ['DevelopmentLoopPlan'],
+      },
+      {
+        id: `coding-${owner}`,
+        goal_id: goalId,
+        role: 'coding_agent',
+        owner,
+        scope: 'Make the smallest project-scoped code changes needed to satisfy the goal.',
+        files_allowed:
+          contextFiles.length > 0
+            ? contextFiles
+            : ['project-scoped files required by objective'],
+        files_forbidden: forbidden,
+        context_files: contextFiles,
+        acceptance: normalizedRequirements,
+        status: 'queued',
+        dependencies: ['manager-scope'],
+        risk: owner === 'integration' ? 'medium' : 'low',
+        logs: [],
+        artifacts: ['CodingResult'],
+      },
+      {
+        id: 'testing-regression',
+        goal_id: goalId,
+        role: 'testing_agent',
+        owner: 'testing',
+        scope: 'Run allowlisted verification commands and capture capped output evidence.',
+        files_allowed: ['read-only test execution'],
+        files_forbidden: forbidden,
+        context_files: contextFiles,
+        acceptance: normalizedTests,
+        status: 'queued',
+        dependencies: [`coding-${owner}`],
+        risk: 'low',
+        logs: [],
+        artifacts: ['test outputs'],
+      },
+      {
+        id: 'goal-audit',
+        goal_id: goalId,
+        role: 'goal_agent',
+        owner: 'goal',
+        scope: 'Compare requirements with coding and testing evidence before declaring success.',
+        files_allowed: ['read-only evidence review'],
+        files_forbidden: forbidden,
+        context_files: contextFiles,
+        acceptance: normalizedRequirements,
+        status: 'queued',
+        dependencies: ['testing-regression'],
+        risk: 'low',
+        logs: [],
+        artifacts: ['goal verdict'],
+      },
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // AI Agent 命令（Phase 2 命名）
 // ---------------------------------------------------------------------------
@@ -222,6 +457,90 @@ export async function agentChatStream(
 export async function agentGetEmotion(): Promise<EmotionState> {
   if (!isTauriEnvironment()) return browserPreviewEmotion();
   return invoke<EmotionState>('agent_get_emotion');
+}
+
+export async function developmentLoopPlan(
+  objective: string,
+  requirements: string[] = [],
+  contextFiles: string[] = [],
+  testCommands: string[] = [],
+  maxIterations?: number | null,
+): Promise<DevelopmentLoopPlan> {
+  if (!isTauriEnvironment()) {
+    return buildPreviewDevelopmentLoopPlan(
+      objective,
+      requirements,
+      contextFiles,
+      testCommands,
+      maxIterations,
+    );
+  }
+  return invoke<DevelopmentLoopPlan>('development_loop_plan', {
+    objective,
+    requirements,
+    contextFiles,
+    testCommands,
+    maxIterations,
+  });
+}
+
+export async function developmentLoopRun(
+  request: DevelopmentLoopRequest,
+): Promise<DevelopmentLoopReport> {
+  if (!isTauriEnvironment()) {
+    const plan = buildPreviewDevelopmentLoopPlan(
+      request.objective,
+      request.requirements,
+      request.context_files,
+      request.test_commands,
+      request.max_iterations,
+    );
+    return {
+      success: false,
+      dry_run: true,
+      iterations: 0,
+      plan,
+      stages: [
+        {
+          role: 'manager_agent',
+          status: 'passed',
+          summary: 'Browser preview planned the development loop.',
+          artifacts: [],
+          duration_ms: 0,
+        },
+        {
+          role: 'goal_agent',
+          status: 'failed',
+          summary: 'Browser preview cannot execute coding or testing agents.',
+          artifacts: ['Run inside the Tauri app to execute the real loop.'],
+          duration_ms: 0,
+        },
+      ],
+      agent_results: [
+        {
+          task_id: 'manager-scope',
+          role: 'manager_agent',
+          status: 'passed',
+          summary: 'Browser preview planned the development loop.',
+          changed_files: [],
+          artifacts: [],
+          duration_ms: 0,
+        },
+        {
+          task_id: 'goal-audit',
+          role: 'goal_agent',
+          status: 'failed',
+          summary: 'Browser preview cannot execute coding or testing agents.',
+          changed_files: [],
+          artifacts: ['Run inside the Tauri app to execute the real loop.'],
+          duration_ms: 0,
+        },
+      ],
+      unmet_requirements: ['Browser preview did not execute coding or tests.'],
+      next_actions: ['Open FairyField in Tauri and run the loop again.'],
+    };
+  }
+  return invoke<DevelopmentLoopReport>('development_loop_run', { request });
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@
 pub mod coding_agent;
 pub mod compressor;
 pub mod delegation;
+pub mod development_loop;
 pub mod primary;
 pub mod tool_agent;
 pub mod toolset;

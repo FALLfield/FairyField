@@ -117,6 +117,10 @@ public/models/default/
 - 可查看记忆库、工具调用日志和 Agent 状态
 - 三次点击角色头像也可切换
 
+### 多 Agent 开发闭环
+
+FairyField 提供 ManagerAgent、CodingAgent、TestingAgent、GoalAgent 四段式开发闭环。它会先规划任务和文件范围，再通过已配置的 coding CLI 执行真实改动，随后运行 allowlist 测试命令，最后由 GoalAgent 对照需求和证据判断是否完成。详情见 `docs/AGENT_LOOP.md`。
+
 ### 情绪系统
 
 Fairy 会根据对话内容自动调整情绪：

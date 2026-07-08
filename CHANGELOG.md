@@ -22,6 +22,7 @@ All notable changes to FairyField will be documented in this file.
 - 130 new Rust-side tests since the MVP baseline; default Rust suite is now 382 tests, with 384 tests under `sherpa-onnx`
 - User configuration system (config/user.rs, ~/.fairyfield/user.json)
 - Coding Agent Manager (Claude Code/KiloCode/OpenCode CLI subprocess support)
+- Multi-agent development loop with ManagerAgent, CodingAgent, TestingAgent, and GoalAgent evidence gates
 - GitHub API integration tool
 - MCP Server expansion: fairy_execute_tool + fairy_get_context
 - OnboardingWizard: 4-step first-time setup (name, call preference, personality, LLM config)
@@ -65,6 +66,7 @@ All notable changes to FairyField will be documented in this file.
 - Rate limiting on tool execution (token bucket algorithm)
 - OAuth token config structure for secure third-party integrations
 - Coding Agent subprocess execution has cwd validation, permission-mode allowlist, timeout kill, and output caps
+- Development-loop test execution uses allowlisted commands, no shell metacharacters, capped output, scoped context files, and explicit dry-run failure
 
 ## [0.1.0] — 2026-05-14
 

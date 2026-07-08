@@ -552,6 +552,9 @@ pub fn run() {
             // Coding Agent 命令（Phase 6）
             agent::coding_agent::coding_agent_list,
             agent::coding_agent::coding_agent_dispatch,
+            // Development Loop 命令（Manager/Coding/Testing/Goal agents）
+            agent::development_loop::development_loop_plan,
+            agent::development_loop::development_loop_run,
             // 语音命令
             voice_start_asr,
             voice_start_tts,

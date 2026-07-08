@@ -154,6 +154,7 @@ cargo clippy         # Lint
 |------|------|
 | [用户指南](docs/USAGE_GUIDE.md) | 安装、配置、使用 |
 | [本地语音策略](docs/LOCAL_TTS.md) | Matcha/Kokoro 选择、延迟设计、模型安装 |
+| [多 Agent 开发闭环](docs/AGENT_LOOP.md) | Manager/Coding/Testing/Goal Agent 协作与安全门 |
 | [Phase 7 路线图](docs/ROADMAP_PHASE7.md) | 语音流式化、工具扩展、UI、XR、市场和 HCI 研究方向 |
 | [架构说明](ARCHITECTURE.md) | v1 前端、后端、工具、记忆和语音架构 |
 | [项目结构](PROJECT_STRUCTURE.md) | 仓库目录职责 |
