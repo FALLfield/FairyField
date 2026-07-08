@@ -19,7 +19,7 @@ All notable changes to FairyField will be documented in this file.
 - Token compressor (TokenJuice-style: HTML to text, URL shortening, truncation)
 - Tools directory restructured: builtins/ (web, file_ops, shell, git, memory, obsidian)
 - Obsidian vault integration tool (search notes, read/write, walkdir traversal)
-- 130 new Rust-side tests since the MVP baseline; default Rust suite is now 382 tests, with 384 tests under `sherpa-onnx`
+- 153 new Rust-side tests since the MVP baseline; default Rust suite is now 405 tests, with 407 tests under `sherpa-onnx`
 - User configuration system (config/user.rs, ~/.fairyfield/user.json)
 - Coding Agent Manager (Claude Code/KiloCode/OpenCode CLI subprocess support)
 - Multi-agent development loop with ManagerAgent, CodingAgent, TestingAgent, and GoalAgent evidence gates
@@ -39,9 +39,11 @@ All notable changes to FairyField will be documented in this file.
 - Tool directory: flat tools/ to tools/builtins/ + tools/mcp/ + tools/community/
 - MCP Server: 3 tools to 5 tools (added execute_tool + get_context)
 - Release metadata aligned for GitHub v1 publication
-- Release verification now covers 482 default automated tests (382 Rust + 100 Frontend), plus 384 Rust tests under `sherpa-onnx`
+- Release verification now covers 507 default automated tests (405 Rust + 102 Frontend), plus 407 Rust tests under `sherpa-onnx`
 - Memory wake-up now derives L1 summaries and L2 palace indexes from stored drawers before falling back to static metadata
 - Memory saves now skip normalized exact duplicates in the same wing/room, and fallback conversation mining stores user text verbatim instead of truncating it
+- Development loop retries now feed the previous failed test output back into the CodingAgent prompt instead of starting the next iteration blind
+- Tools IPC and MCP `fairy_execute_tool` now execute through the same Agent `Toolset` path used by the primary agent
 
 ### Fixed
 - `autoResize()` in ChatInput now properly recalculates on input event
@@ -61,12 +63,20 @@ All notable changes to FairyField will be documented in this file.
 - Agent status badge now returns to idle after stream completion or error
 - Browser preview no longer crashes when Tauri event listeners are unavailable
 - VRM loading now uses `combineSkeletons()` instead of deprecated `removeUnnecessaryJoints()`
+- Voice ASR now captures real microphone audio for `voice_start_asr`, downmixes to mono, resamples to the ASR target sample rate, rejects silent/too-short recordings, and emits `voice:asr_result`
+- TTS cleanup strips developer artifacts such as command/file snippets before any engine speaks, while preserving natural Chinese/English text
+- `web_fetch` response caps now decode only valid UTF-8 boundaries, preventing replacement characters or byte-boundary panics
+- Web fetch SSRF protection now blocks IPv6 link-local addresses in addition to localhost, loopback, private, and unique-local ranges
+- Weather is no longer config-gated; it delegates to the hardened weather/web path and can return live weather without an API key when public sources are reachable
+- MCP dotted IDs now normalize to real registered tools such as `obsidian_search`, `notion`, `github`, and `terminal`
 
 ### Security
 - Rate limiting on tool execution (token bucket algorithm)
 - OAuth token config structure for secure third-party integrations
 - Coding Agent subprocess execution has cwd validation, permission-mode allowlist, timeout kill, and output caps
 - Development-loop test execution uses allowlisted commands, no shell metacharacters, capped output, scoped context files, and explicit dry-run failure
+- Terminal tool no longer uses `sh -c`; it executes allowlisted inspection commands directly and rejects interpreter/package-runner entry points such as Python, Node, npm, pnpm, and Cargo
+- Development-loop GoalAgent now requires Git-detected changed-file evidence and fails the loop when a CodingAgent edits outside its assigned file scope
 
 ## [0.1.0] — 2026-05-14
 

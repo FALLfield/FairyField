@@ -15,6 +15,7 @@ use llm::LlmProviderConfig;
 use memory::store::MemoryStore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::Emitter;
 use voice::VoicePipeline;
 
@@ -72,6 +73,15 @@ fn greet(name: &str) -> String {
 
 // ---------- 语音命令 ----------
 
+const ASR_CAPTURE_MS: u64 = 3_000;
+const ASR_TARGET_SAMPLE_RATE: u32 = 16_000;
+
+#[derive(Debug, Clone, Serialize)]
+struct AsrResultEvent {
+    text: String,
+    is_final: bool,
+}
+
 /// 启动语音识别
 ///
 /// 使用当前 VoicePipeline 执行一次 ASR。实时麦克风捕获由 voice/audio_input 模块处理。
@@ -81,13 +91,44 @@ struct VoiceState {
 }
 
 #[tauri::command]
-async fn voice_start_asr(state: tauri::State<'_, VoiceState>) -> Result<String, String> {
+async fn voice_start_asr(
+    state: tauri::State<'_, VoiceState>,
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
+    let (samples, sample_rate) = capture_microphone_for_asr().await?;
     let pipeline = state.pipeline.lock().await;
-    let samples = vec![0.0f32; 24000];
     let result = pipeline
-        .recognize(&samples, 24000)
+        .recognize(&samples, sample_rate)
         .map_err(|e| e.to_string())?;
-    Ok(result.text)
+    let text = result.text.trim().to_string();
+    if text.is_empty() {
+        return Err("没有识别到有效语音，请靠近麦克风再试一次。".into());
+    }
+    let _ = app_handle.emit(
+        "voice:asr_result",
+        AsrResultEvent {
+            text: text.clone(),
+            is_final: true,
+        },
+    );
+    Ok(text)
+}
+
+async fn capture_microphone_for_asr() -> Result<(Vec<f32>, u32), String> {
+    tokio::task::spawn_blocking(|| {
+        let mut input = voice::audio_input::AudioInput::new()
+            .map_err(|e| format!("无法启动麦克风录音: {e}"))?;
+        std::thread::sleep(Duration::from_millis(ASR_CAPTURE_MS));
+        let samples = input.drain();
+        let sample_rate = input.sample_rate();
+        input.stop();
+        let prepared =
+            voice::audio_input::prepare_asr_samples(&samples, sample_rate, ASR_TARGET_SAMPLE_RATE)
+                .map_err(|e| format!("{e}"))?;
+        Ok((prepared.samples, prepared.sample_rate))
+    })
+    .await
+    .map_err(|e| format!("麦克风录音任务失败: {e}"))?
 }
 
 /// 启动语音合成
@@ -189,7 +230,17 @@ async fn get_emotion_state(state: tauri::State<'_, AgentState>) -> Result<Emotio
 
 #[tauri::command]
 async fn start_asr(state: tauri::State<'_, VoiceState>) -> Result<String, String> {
-    voice_start_asr(state).await
+    let (samples, sample_rate) = capture_microphone_for_asr().await?;
+    let pipeline = state.pipeline.lock().await;
+    let result = pipeline
+        .recognize(&samples, sample_rate)
+        .map_err(|e| e.to_string())?;
+    let text = result.text.trim().to_string();
+    if text.is_empty() {
+        Err("没有识别到有效语音，请靠近麦克风再试一次。".into())
+    } else {
+        Ok(text)
+    }
 }
 
 #[tauri::command]
@@ -509,11 +560,12 @@ pub fn run() {
     let registry =
         tools::registry::ToolRegistry::new_with_memory(Some(Arc::clone(&shared_memory_layers)));
     let executor = Arc::new(registry.into_executor());
-    let executor_for_mcp = Arc::clone(&executor);
     let guard = Arc::new(security::CommandGuard::new());
     let injection_detector = Arc::new(security::InjectionDetector::new());
     let toolset = Arc::new(agent::Toolset::new(executor, guard, injection_detector));
     let toolset_for_state = Arc::clone(&toolset);
+    let toolset_for_tools_state = Arc::clone(&toolset);
+    let toolset_for_mcp = Arc::clone(&toolset);
 
     // 创建 Agent（带工具和记忆）
     // 尝试所有提供商，找到第一个 API Key 有效的
@@ -689,9 +741,7 @@ pub fn run() {
         .manage({
             // 创建工具子系统
             tools::commands::ToolsState {
-                registry: std::sync::Mutex::new(tools::registry::ToolRegistry::new_with_memory(
-                    Some(shared_memory_layers.clone()),
-                )),
+                toolset: toolset_for_tools_state,
             }
         })
         .manage({
@@ -724,7 +774,7 @@ pub fn run() {
             // 创建 MCP Server 子系统（Phase 4）— 共享记忆层
             mcp::server::McpState {
                 layers: shared_memory_layers.clone(),
-                executor: executor_for_mcp,
+                toolset: toolset_for_mcp,
             }
         })
         .run(tauri::generate_context!())

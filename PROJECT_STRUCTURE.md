@@ -13,7 +13,7 @@ FairyField/
 │   └── main.ts
 ├── src-tauri/                   # Rust backend and Tauri shell
 │   ├── src/
-│   │   ├── agent/               # Primary agent, toolset, delegation, coding agent
+│   │   ├── agent/               # Primary agent, toolset, delegation, coding agent, development loop
 │   │   ├── config/              # App config, user profile, secret store
 │   │   ├── gateway/             # Discord/webhook and cron gateway
 │   │   ├── growth/              # Growth engine and skills

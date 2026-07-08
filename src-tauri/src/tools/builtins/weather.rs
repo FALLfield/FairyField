@@ -1,6 +1,6 @@
-//! Weather tool (configuration-gated, no test network calls).
+//! Weather tool.
 
-use super::simple::{config_required, env_present};
+use super::web::WebSearchTool;
 use crate::tools::executor::{Tool, ToolError};
 use crate::tools::manifest::{ToolCategory, ToolManifest, ToolPermission};
 use serde::Deserialize;
@@ -26,7 +26,8 @@ impl WeatherTool {
         ToolManifest {
             id: "weather".into(),
             name: "Weather".into(),
-            description: "Fetch weather forecasts when a weather API key is configured.".into(),
+            description: "Fetch current weather through FairyField's built-in weather providers."
+                .into(),
             category: ToolCategory::Network,
             parameters: Self.parameters_schema(),
             permissions: vec![ToolPermission::NetworkAccess],
@@ -46,7 +47,7 @@ impl Tool for WeatherTool {
         "weather"
     }
     fn description(&self) -> &str {
-        "Fetch weather forecasts when a weather API key is configured"
+        "Fetch current weather through FairyField's built-in weather providers"
     }
     fn parameters_schema(&self) -> serde_json::Value {
         serde_json::json!({
@@ -71,10 +72,14 @@ impl Tool for WeatherTool {
         let parsed = serde_json::from_str::<WeatherInput>(input);
         Box::pin(async move {
             let params = parsed.map_err(|e| ToolError::ValidationFailed(e.to_string()))?;
-            if !env_present("OPENWEATHER_API_KEY") {
-                return config_required("weather", "forecast", "OPENWEATHER_API_KEY");
-            }
-            Ok(serde_json::json!({"status":"ready","service":"weather","city":params.city,"days":params.days,"network_call":"skipped"}).to_string())
+            let query = if params.days > 1 {
+                format!("{} {} day weather forecast", params.city, params.days)
+            } else {
+                format!("{} weather", params.city)
+            };
+            WebSearchTool
+                .execute(&serde_json::json!({ "query": query, "limit": 3 }).to_string())
+                .await
         })
     }
 }
@@ -97,12 +102,10 @@ mod tests {
         assert!(!WeatherTool.validate_input(r#"{"city":"Tokyo","days":8}"#));
     }
     #[tokio::test]
-    async fn no_key_is_config_required() {
+    async fn no_key_returns_weather_or_clear_fallback() {
         std::env::remove_var("OPENWEATHER_API_KEY");
-        assert!(WeatherTool
-            .execute(r#"{"city":"Tokyo"}"#)
-            .await
-            .unwrap()
-            .contains("configuration_required"));
+        let result = WeatherTool.execute(r#"{"city":"Tokyo"}"#).await.unwrap();
+        assert!(!result.contains("configuration_required"));
+        assert!(result.contains("天气") || result.contains("weather") || result.contains("Tokyo"));
     }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onErrorCaptured } from 'vue';
+import { computed, ref, onErrorCaptured } from 'vue';
 import CharacterCanvas from './components/CharacterCanvas.vue';
 import ChatPanel from './components/ChatPanel.vue';
 import ControlPanel from './components/ControlPanel.vue';
@@ -49,6 +49,7 @@ const {
 const { devMode, onAvatarTripleClick } = useDevMode();
 const { status: agentStatus, toolLog, resetStatus: resetAgentStatus, setStatus: setAgentStatus } = useAgentStatus();
 const { showOnboarding, isLoading: onboardingLoading, completeOnboarding } = useOnboarding();
+const visibleAgentStatus = computed(() => (isStreaming.value ? agentStatus.value : 'idle'));
 
 // --- 录音状态 ---
 const isRecording = ref(false);
@@ -190,7 +191,7 @@ async function handleOnboardingComplete(data: OnboardingData): Promise<void> {
     <AgentLogPanel v-if="devMode" :logs="toolLog" @clear="resetAgentStatus" />
 
     <!-- Agent 状态指示（始终渲染，idle 时自动隐藏） -->
-    <AgentStatusBadge :status="agentStatus" />
+    <AgentStatusBadge :status="visibleAgentStatus" />
   </main>
 </template>
 

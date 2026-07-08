@@ -319,7 +319,7 @@ mod tests {
             (
                 "weather",
                 r#"{"city":"Tokyo","days":1}"#,
-                &["configuration_required", "ready"],
+                &["天气", "weather", "Tokyo", "东京"],
                 &[],
             ),
             (

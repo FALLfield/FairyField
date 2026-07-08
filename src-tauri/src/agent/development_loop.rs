@@ -6,6 +6,7 @@ use super::coding_agent::{CodingAgentManager, CodingAgentType, CodingTask};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
+use std::process::Command;
 use std::process::Stdio;
 use tokio::io::AsyncReadExt;
 use tokio::time::{timeout, Duration};
@@ -162,6 +163,11 @@ impl DevelopmentLoopManager {
         let mut stages = Vec::new();
         let mut unmet_requirements = Vec::new();
         let mut next_actions = Vec::new();
+        let baseline_changed_files = git_changed_files(&cwd)
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let mut previous_test_feedback = Vec::new();
 
         stages.push(LoopStageResult {
             role: LoopAgentRole::ManagerAgent,
@@ -223,7 +229,11 @@ impl DevelopmentLoopManager {
             if let Some(agent_name) = request.coding_agent.as_deref() {
                 let agent = parse_coding_agent(agent_name)?;
                 let task = CodingTask {
-                    description: coding_prompt(&plan),
+                    description: coding_prompt_for_iteration(
+                        &plan,
+                        &previous_test_feedback,
+                        iteration,
+                    ),
                     context_files: plan.context_files.clone(),
                     model: request.model.clone(),
                     max_turns: Some(6),
@@ -238,11 +248,33 @@ impl DevelopmentLoopManager {
                 {
                     Ok(result) if result.success => {
                         coding_was_executed = true;
+                        let changed_files =
+                            git_changed_delta(&cwd, &baseline_changed_files).unwrap_or_default();
+                        let violations = scope_violations(&plan, &changed_files);
+                        let artifacts = coding_artifacts(&result.output, &changed_files);
+                        if !violations.is_empty() {
+                            stages.push(LoopStageResult {
+                                role: LoopAgentRole::CodingAgent,
+                                status: LoopStageStatus::Failed,
+                                summary: format!(
+                                    "{} changed file(s) outside the assigned scope on iteration {}.",
+                                    violations.len(),
+                                    iteration
+                                ),
+                                artifacts,
+                                duration_ms: result.duration_ms,
+                            });
+                            unmet_requirements.push(format!(
+                                "Coding agent changed files outside scope: {}",
+                                violations.join(", ")
+                            ));
+                            break;
+                        }
                         stages.push(LoopStageResult {
                             role: LoopAgentRole::CodingAgent,
                             status: LoopStageStatus::Passed,
                             summary: format!("{} completed iteration {}.", result.agent, iteration),
-                            artifacts: vec![truncate_artifact(&result.output)],
+                            artifacts,
                             duration_ms: result.duration_ms,
                         });
                     }
@@ -289,6 +321,9 @@ impl DevelopmentLoopManager {
 
             let test_result = run_test_commands(&cwd, &plan.test_commands).await;
             let tests_passed = matches!(test_result.status, LoopStageStatus::Passed);
+            if !tests_passed {
+                previous_test_feedback = test_result.artifacts.clone();
+            }
             stages.push(test_result);
             if tests_passed {
                 break;
@@ -632,6 +667,26 @@ fn coding_prompt(plan: &DevelopmentLoopPlan) -> String {
     )
 }
 
+fn coding_prompt_for_iteration(
+    plan: &DevelopmentLoopPlan,
+    previous_test_feedback: &[String],
+    iteration: u8,
+) -> String {
+    let mut prompt = coding_prompt(plan);
+    if !previous_test_feedback.is_empty() {
+        prompt.push_str(&format!(
+            "\n\nPrevious test failure from iteration {}:\n{}\n\nUse this feedback to fix the same task, then report changed files and verification evidence.",
+            iteration.saturating_sub(1),
+            previous_test_feedback
+                .iter()
+                .map(|artifact| truncate_artifact(artifact))
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        ));
+    }
+    prompt
+}
+
 async fn run_test_commands(cwd: &Path, commands: &[String]) -> LoopStageResult {
     let start = std::time::Instant::now();
     if commands.is_empty() {
@@ -770,6 +825,68 @@ fn command_working_dir(cwd: &Path, command: &str) -> PathBuf {
     }
 }
 
+fn git_changed_delta(cwd: &Path, baseline: &BTreeSet<String>) -> Result<Vec<String>, String> {
+    Ok(git_changed_files(cwd)?
+        .into_iter()
+        .filter(|file| !baseline.contains(file))
+        .collect())
+}
+
+fn git_changed_files(cwd: &Path) -> Result<Vec<String>, String> {
+    let output = Command::new("git")
+        .args(["status", "--short", "--untracked-files=all"])
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| format!("failed to run git status: {e}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(parse_git_status_paths(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
+}
+
+fn parse_git_status_paths(output: &str) -> Vec<String> {
+    let mut files = BTreeSet::new();
+    for line in output.lines() {
+        let Some(path_part) = line.get(3..) else {
+            continue;
+        };
+        for path in path_part.split(" -> ") {
+            let cleaned = path.trim().trim_matches('"');
+            if looks_like_git_status_path(cleaned) {
+                files.insert(cleaned.to_string());
+            }
+        }
+    }
+    files.into_iter().collect()
+}
+
+fn looks_like_git_status_path(value: &str) -> bool {
+    !value.is_empty()
+        && !value.contains('\0')
+        && !value.contains("..")
+        && !Path::new(value).is_absolute()
+}
+
+fn coding_artifacts(output: &str, changed_files: &[String]) -> Vec<String> {
+    let mut artifacts = vec![truncate_artifact(output)];
+    let changed = if changed_files.is_empty() {
+        "Changed files:\n- none detected by git status".into()
+    } else {
+        format!(
+            "Changed files:\n{}",
+            changed_files
+                .iter()
+                .map(|file| format!("- {file}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    };
+    artifacts.push(changed);
+    artifacts
+}
+
 fn goal_unmet_requirements(plan: &DevelopmentLoopPlan, stages: &[LoopStageResult]) -> Vec<String> {
     let mut unmet = Vec::new();
     if !stages.iter().any(|stage| {
@@ -785,7 +902,60 @@ fn goal_unmet_requirements(plan: &DevelopmentLoopPlan, stages: &[LoopStageResult
     if plan.requirements.is_empty() {
         unmet.push("No explicit requirement was available for the GoalAgent to verify.".into());
     }
+    if stages.iter().any(|stage| {
+        stage.role == LoopAgentRole::CodingAgent && stage.status == LoopStageStatus::Passed
+    }) {
+        let changed_files = changed_files_from_stages(stages);
+        if changed_files.is_empty() {
+            unmet.push(
+                "No Git-detected changed files are available as CodingAgent evidence.".into(),
+            );
+        }
+        let violations = scope_violations(plan, &changed_files);
+        if !violations.is_empty() {
+            unmet.push(format!(
+                "CodingAgent evidence includes files outside scope: {}",
+                violations.join(", ")
+            ));
+        }
+    }
     unmet
+}
+
+fn changed_files_from_stages(stages: &[LoopStageResult]) -> Vec<String> {
+    stages
+        .iter()
+        .filter(|stage| stage.role == LoopAgentRole::CodingAgent)
+        .flat_map(|stage| extract_changed_files(&stage.artifacts))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn scope_violations(plan: &DevelopmentLoopPlan, files: &[String]) -> Vec<String> {
+    let allowed = plan
+        .tasks
+        .iter()
+        .find(|task| task.role == LoopAgentRole::CodingAgent)
+        .map(|task| task.files_allowed.as_slice())
+        .unwrap_or(&[]);
+
+    files
+        .iter()
+        .filter(|file| !file_allowed_by_scope(file, allowed))
+        .cloned()
+        .collect()
+}
+
+fn file_allowed_by_scope(file: &str, allowed: &[String]) -> bool {
+    if !looks_like_project_file(file) {
+        return false;
+    }
+    allowed.iter().any(|scope| {
+        scope == "project-scoped files required by objective"
+            || file == scope
+            || scope.ends_with('/') && file.starts_with(scope)
+    })
 }
 
 fn agent_results_from_stages(
@@ -820,7 +990,7 @@ fn extract_changed_files(artifacts: &[String]) -> Vec<String> {
         for line in artifact.lines() {
             let trimmed = line
                 .trim()
-                .trim_start_matches(|ch| matches!(ch, '-' | '*' | '`' | ' '))
+                .trim_start_matches(['-', '*', '`', ' '])
                 .trim_end_matches('`');
             if looks_like_project_file(trimmed) {
                 files.insert(trimmed.to_string());
@@ -1155,5 +1325,105 @@ mod tests {
                 "src-tauri/src/agent/development_loop.rs".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn prompt_carries_failed_test_feedback_to_next_iteration() {
+        let plan = DevelopmentLoopManager::new().plan(&request()).unwrap();
+        let prompt = coding_prompt_for_iteration(
+            &plan,
+            &["cargo test\nthread failed at web.rs:42".into()],
+            2,
+        );
+
+        assert!(prompt.contains("Previous test failure from iteration 1"));
+        assert!(prompt.contains("thread failed at web.rs:42"));
+        assert!(prompt.contains("Use this feedback"));
+    }
+
+    #[test]
+    fn parses_git_status_paths_as_loop_evidence() {
+        let output = concat!(
+            " M src-tauri/src/agent/development_loop.rs\n",
+            "?? docs/AGENT_LOOP.md\n",
+            "R  src/old.ts -> src/new.ts\n",
+            "?? .env\n",
+            "?? /tmp/secret.txt\n"
+        );
+        let files = parse_git_status_paths(output);
+
+        assert_eq!(
+            files,
+            vec![
+                ".env".to_string(),
+                "docs/AGENT_LOOP.md".to_string(),
+                "src-tauri/src/agent/development_loop.rs".to_string(),
+                "src/new.ts".to_string(),
+                "src/old.ts".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn detects_loop_scope_violations() {
+        let plan = DevelopmentLoopManager::new().plan(&request()).unwrap();
+        let violations = scope_violations(
+            &plan,
+            &[
+                "src-tauri/src/tools/builtins/web.rs".into(),
+                "src-tauri/src/voice/tts.rs".into(),
+            ],
+        );
+
+        assert_eq!(violations, vec!["src-tauri/src/voice/tts.rs".to_string()]);
+    }
+
+    #[test]
+    fn goal_requires_git_changed_file_evidence() {
+        let plan = DevelopmentLoopManager::new().plan(&request()).unwrap();
+        let stages = vec![
+            LoopStageResult {
+                role: LoopAgentRole::CodingAgent,
+                status: LoopStageStatus::Passed,
+                summary: "agent claimed success".into(),
+                artifacts: vec!["all good".into()],
+                duration_ms: 1,
+            },
+            LoopStageResult {
+                role: LoopAgentRole::TestingAgent,
+                status: LoopStageStatus::Passed,
+                summary: "tests passed".into(),
+                artifacts: vec!["cargo test ok".into()],
+                duration_ms: 1,
+            },
+        ];
+
+        let unmet = goal_unmet_requirements(&plan, &stages);
+        assert!(unmet
+            .iter()
+            .any(|item| item.contains("No Git-detected changed files")));
+    }
+
+    #[test]
+    fn goal_accepts_scoped_changed_file_evidence() {
+        let plan = DevelopmentLoopManager::new().plan(&request()).unwrap();
+        let stages = vec![
+            LoopStageResult {
+                role: LoopAgentRole::CodingAgent,
+                status: LoopStageStatus::Passed,
+                summary: "agent completed".into(),
+                artifacts: vec!["Changed files:\n- src-tauri/src/tools/builtins/web.rs".into()],
+                duration_ms: 1,
+            },
+            LoopStageResult {
+                role: LoopAgentRole::TestingAgent,
+                status: LoopStageStatus::Passed,
+                summary: "tests passed".into(),
+                artifacts: vec!["cargo test ok".into()],
+                duration_ms: 1,
+            },
+        ];
+
+        assert!(goal_unmet_requirements(&plan, &stages).is_empty());
     }
 }

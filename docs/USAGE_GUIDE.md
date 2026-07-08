@@ -36,7 +36,7 @@ export ANTHROPIC_API_KEY="sk-ant-your-key-here"
 # 开发模式
 npm run tauri dev
 
-# 生产构建
+# 发布打包时才运行生产构建
 npm run tauri build
 ```
 
@@ -83,8 +83,7 @@ FairyField 支持离线语音处理：
 
 启用真实语音引擎：
 ```bash
-cd src-tauri
-cargo build --features sherpa-onnx
+npm run tauri -- dev --features sherpa-onnx
 ```
 
 不启用 `sherpa-onnx` feature 时，TTS 回退到 macOS `say` 命令，ASR/VAD 使用 Mock 引擎。启用后默认优先 Matcha 双语低延迟 TTS；缺少 Matcha 模型时回退到 Kokoro，再回退到平台默认。
@@ -156,7 +155,9 @@ Tauri IPC 通信层
 ### 麦克风不工作
 1. 确认 macOS 系统设置中已授权终端/IDE 麦克风权限
 2. 检查是否安装了语音模型：`ls ~/.fairyfield/models/`
-3. 未安装模型时 ASR 会返回固定文本，不影响文本聊天
+3. 使用真实 ASR 时请用 `npm run tauri -- dev --features sherpa-onnx` 启动
+4. 静音或录音过短会返回明确错误，不会再把空音频送进识别器
+5. 未安装模型时 ASR 会返回固定文本，不影响文本聊天
 
 ### LLM 无响应
 1. 检查 API Key 环境变量是否设置：`echo $OPENAI_API_KEY`
@@ -166,8 +167,9 @@ Tauri IPC 通信层
 ### Web 搜索或网页抓取无结果
 1. 天气问题建议直接写城市 + 天气，例如 `澳门天气`
 2. `web_fetch` 只允许公开 `http://`/`https://` 页面；localhost、内网 IP 和 `.local` 域名会被拦截
-3. 大网页会自动截断，避免工具调用长时间占用 Agent Loop
-4. 如果网络源不可达，Fairy 会返回明确的失败原因和备用搜索链接
+3. IPv6 link-local、loopback、private/unique-local 地址和不安全重定向会被拦截
+4. 大网页会自动截断，避免工具调用长时间占用 Agent Loop；截断位置保持 UTF-8 字符边界
+5. 如果网络源不可达，Fairy 会返回明确的失败原因和备用搜索链接
 
 ### 构建失败
 ```bash

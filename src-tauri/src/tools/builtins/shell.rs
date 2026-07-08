@@ -15,7 +15,7 @@ const MAX_OUTPUT_BYTES: usize = 10_000;
 
 const ALLOWED_COMMANDS: &[&str] = &[
     "ls", "cat", "pwd", "echo", "date", "which", "whoami", "env", "find", "grep", "head", "tail",
-    "wc", "sort", "uniq", "git", "cargo", "rustc", "node", "npm", "pnpm", "python3",
+    "wc", "sort", "uniq", "git",
 ];
 
 #[derive(Deserialize)]
@@ -31,6 +31,16 @@ fn default_timeout() -> u64 {
 
 fn extract_cmd_name(command: &str) -> String {
     command.split_whitespace().next().unwrap_or("").to_string()
+}
+
+fn split_direct_command(command: &str) -> Result<(String, Vec<String>), String> {
+    let mut parts = command.split_whitespace();
+    let program = parts
+        .next()
+        .ok_or_else(|| "命令不能为空".to_string())?
+        .to_string();
+    let args = parts.map(str::to_string).collect::<Vec<_>>();
+    Ok((program, args))
 }
 
 /// 检查命令是否包含 shell 元字符（防止换行/分号/管道/反引号等注入绕过白名单）
@@ -140,12 +150,14 @@ fn truncate_to_bytes(s: &str, max_bytes: usize) -> &str {
     &s[..end]
 }
 
-/// 执行 shell 命令并真正强制超时。
+/// 直接执行白名单命令并真正强制超时。
+///
+/// 不通过 `sh -c`，避免白名单命令被 shell 展开、命令替换或解释器参数绕过。
 /// spawn 子进程后轮询状态，超时时 kill。
 fn wait_with_timeout(command: &str, timeout_secs: u64) -> Result<String, String> {
-    let mut child = Command::new("sh")
-        .arg("-c")
-        .arg(command)
+    let (program, args) = split_direct_command(command)?;
+    let mut child = Command::new(program)
+        .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -237,6 +249,23 @@ mod tests {
     }
 
     #[test]
+    fn reject_interpreters_and_package_runners() {
+        let tool = ShellTool::new();
+        assert!(!tool.validate_input(r#"{"command": "python3 -c print(1)"}"#));
+        assert!(!tool.validate_input(r#"{"command": "node script.js"}"#));
+        assert!(!tool.validate_input(r#"{"command": "npm test"}"#));
+        assert!(!tool.validate_input(r#"{"command": "pnpm install"}"#));
+        assert!(!tool.validate_input(r#"{"command": "cargo test"}"#));
+    }
+
+    #[test]
+    fn splits_without_shell_interpretation() {
+        let (program, args) = split_direct_command("echo hello world").unwrap();
+        assert_eq!(program, "echo");
+        assert_eq!(args, vec!["hello".to_string(), "world".to_string()]);
+    }
+
+    #[test]
     fn contains_metachar_detection() {
         assert!(contains_shell_metacharacters("echo\nrm"));
         assert!(contains_shell_metacharacters("a;b"));
@@ -263,11 +292,9 @@ mod tests {
     #[tokio::test]
     async fn truncates_multibyte_output() {
         let tool = ShellTool::new();
-        // Generate CJK output exceeding MAX_OUTPUT_BYTES
-        let result = tool
-            .execute(r#"{"command": "python3 -c \"print('你' * 5000)\""}"#)
-            .await;
-        // python3 is in the allowed list; skip if not installed
+        // Generate CJK output exceeding MAX_OUTPUT_BYTES without invoking an interpreter.
+        let command = format!(r#"{{"command": "echo {}"}}"#, "你".repeat(5000));
+        let result = tool.execute(&command).await;
         if let Ok(output) = result {
             assert!(output.len() <= MAX_OUTPUT_BYTES + 3); // at most one char over
             assert!(output.chars().all(|c| c == '你' || c == '\n'));

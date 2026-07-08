@@ -34,12 +34,19 @@ The local pipeline now reduces latency in two ways:
 
 - TTS text is cleaned before synthesis, so markdown, code blocks, URLs, emoji, and internal emotion/tool tags are not read aloud.
 - Long replies are split into sentence-sized chunks, so the first sentence can synthesize and play before the full response has been converted to audio.
+- Microphone ASR input is captured from the system default device, downmixed to mono, resampled to 16 kHz, and rejected when it is silent or too short. This prevents empty buffers from producing nonsense text.
 
 Future improvement for ChatGPT Voice-like responsiveness:
 
 - Stream LLM tokens into a sentence queue.
 - Start TTS as soon as the first sentence is complete.
 - Feed generated PCM to the frontend lip-sync channel while audio plays.
+
+## Current Limits
+
+- The v1 path is local-first and turn-based. It starts faster than full-message synthesis, but it is not yet a true duplex streaming voice call like ChatGPT Voice.
+- Matcha bilingual routing uses script-based segmentation. Chinese and English pronunciation are much better than one-model Kokoro fallback, but cross-language prosody is still a Phase 7 refinement.
+- macOS `say` remains a last-resort fallback only; when it is used, voice quality depends on installed system voices.
 
 ## Install
 

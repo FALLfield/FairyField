@@ -829,7 +829,12 @@ fn is_private_or_local_ip(ip: IpAddr) -> bool {
         IpAddr::V4(v4) => {
             v4.is_private() || v4.is_loopback() || v4.is_link_local() || v4.is_unspecified()
         }
-        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified() || v6.is_unique_local(),
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_unique_local()
+                || ((v6.segments()[0] & 0xffc0) == 0xfe80)
+        }
     }
 }
 
@@ -856,8 +861,17 @@ async fn read_response_text_limited(
         }
     }
 
-    let text = String::from_utf8_lossy(&bytes).to_string();
+    let text = decode_limited_utf8_bytes(&bytes, bytes.len());
     Ok((text, truncated))
+}
+
+fn decode_limited_utf8_bytes(bytes: &[u8], max_bytes: usize) -> String {
+    let limit = max_bytes.min(bytes.len());
+    let mut end = limit;
+    while end > 0 && std::str::from_utf8(&bytes[..end]).is_err() {
+        end -= 1;
+    }
+    String::from_utf8_lossy(&bytes[..end]).to_string()
 }
 
 /// 简单的 HTML 标签剥离（跳过 script/style 内容）
@@ -995,6 +1009,23 @@ mod tests {
         let result = tool.execute(r#"{"url": "http://localhost:1420"}"#).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Local hosts"));
+    }
+
+    #[test]
+    fn blocks_ipv6_local_network_ranges() {
+        assert!(is_private_or_local_ip("::1".parse().unwrap()));
+        assert!(is_private_or_local_ip("fc00::1".parse().unwrap()));
+        assert!(is_private_or_local_ip("fe80::1".parse().unwrap()));
+        assert!(!is_private_or_local_ip(
+            "2606:4700:4700::1111".parse().unwrap()
+        ));
+    }
+
+    #[test]
+    fn decodes_limited_response_without_replacement_character() {
+        let text = decode_limited_utf8_bytes("天气预报".as_bytes(), 5);
+        assert_eq!(text, "天");
+        assert!(!text.contains('\u{fffd}'));
     }
 
     #[test]

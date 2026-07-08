@@ -38,9 +38,10 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 - ✅ Phase 0-5 已完成：桌面容器、3D 角色、语音管道、记忆、Agent Loop、MVP 发布资料。
 - ✅ Phase 6 已完成：UI 分层、工具系统、用户引导、Coding Agent、MCP 双向集成、社区插件和共享记忆后端。
 - ✅ v1 硬化已完成：Web/weather 工具、网页抓取、UTF-8 截断、工具超时和 MemPalace 风格 wake-up/去重已补强。
+- ✅ v1 closure hardening 已完成：真实麦克风 ASR 捕获/重采样、TTS 开发文本清洗、Tools IPC/MCP 共享 Toolset、终端直执行安全收紧、Development Loop Git 证据门。
 - ✅ 版本已统一到 `1.0.0`：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
 - ✅ 默认模型路径指向仓库内可用资源：`public/models/default/2031903848872972007.glb`。
-- ✅ 自动化测试：382 Rust + 100 Frontend = 482 default tests passed；`sherpa-onnx` feature 下 384 Rust tests passed。
+- ✅ 自动化测试：405 Rust + 102 Frontend = 507 default tests passed；`sherpa-onnx` feature 下 407 Rust tests passed。
 - ✅ 发布前验证命令：`npm run build`、`npm run test`、`cargo fmt --check`、`cargo check`、`cargo test`、`cargo clippy -- -D warnings`、`cargo check --features sherpa-onnx`、`cargo test --features sherpa-onnx`、`cargo clippy --features sherpa-onnx -- -D warnings`。
 
 ### Phase 6 完成项
@@ -69,6 +70,10 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 - ✅ 中文/emoji 工具结果不再因字节截断触发 panic。
 - ✅ `web_fetch` 不再自动跟随不安全重定向，长响应会截断并标注。
 - ✅ fallback 对话记忆保存用户原文，不再截断摘要。
+- ✅ `voice_start_asr` 使用真实麦克风样本，自动 downmix/resample，静音或过短录音返回明确错误。
+- ✅ `fairy_execute_tool`、`tools_execute` 和 Agent Loop 共享 Toolset 安全路径。
+- ✅ Terminal 工具不再通过 `sh -c`，并拒绝 Python/Node/npm/pnpm/Cargo 等通用执行器入口。
+- ✅ Development Loop 不再信任 agent 自述；GoalAgent 要求 Git changed-file evidence，越界修改会失败。
 
 ### 待后续（Phase 7+）
 

@@ -3,15 +3,15 @@
 //! 将 Fairy 的记忆系统暴露为 Claude Code 可用的工具。
 //! 通过 Tauri IPC 命令提供 fairy_memory_search 和 fairy_wake_up。
 
+use crate::agent::{Toolset, ToolsetError};
 use crate::memory::layers::MemoryLayers;
-use crate::tools::executor::ToolExecutor;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 /// MCP Server 管理状态
 pub struct McpState {
     pub layers: Arc<Mutex<MemoryLayers>>,
-    pub executor: Arc<ToolExecutor>,
+    pub toolset: Arc<Toolset>,
 }
 
 /// MCP 工具定义
@@ -178,10 +178,10 @@ pub async fn mcp_fairy_execute_tool(
 
     let tool_name = normalize_tool_id(&tool_id);
     let input = serde_json::to_string(&params).map_err(|e| e.to_string())?;
-    let output = match state.executor.execute(&tool_name, &input).await {
+    let output = match state.toolset.execute(&tool_name, &input).await {
         Ok(output) => output,
-        Err(first_err) if tool_name != tool_id => state
-            .executor
+        Err(first_err) if should_retry_raw_tool_id(&tool_id, &tool_name, &first_err) => state
+            .toolset
             .execute(&tool_id, &input)
             .await
             .map_err(|fallback_err| {
@@ -201,16 +201,42 @@ pub async fn mcp_fairy_execute_tool(
     }))
 }
 
+fn should_retry_raw_tool_id(tool_id: &str, normalized: &str, error: &ToolsetError) -> bool {
+    tool_id != normalized
+        && !matches!(
+            error,
+            ToolsetError::SecurityBlocked { .. } | ToolsetError::CommandNotApproved { .. }
+        )
+}
+
 fn normalize_tool_id(tool_id: &str) -> String {
-    match tool_id.trim() {
+    let trimmed = tool_id.trim();
+    match trimmed {
         "web.search" => "web_search".into(),
         "web.fetch" => "web_fetch".into(),
         "file.read" => "file_read".into(),
         "file.write" => "file_write".into(),
         "memory.search" => "memory_search".into(),
         "memory.save" => "memory_save".into(),
-        "git.run" => "git".into(),
-        "obsidian.search_notes" | "obsidian.read_note" | "obsidian.write_note" => "obsidian".into(),
+        "git.run" | "git.status" | "git.log" | "git.diff" => "git".into(),
+        "terminal.run" | "shell.run" => "terminal".into(),
+        "obsidian.search_notes" | "obsidian.search" | "obsidian" => "obsidian_search".into(),
+        other
+            if other.starts_with("github.")
+                || other.starts_with("notion.")
+                || other.starts_with("linear.")
+                || other.starts_with("gmail.")
+                || other.starts_with("calendar.")
+                || other.starts_with("slack.")
+                || other.starts_with("discord.")
+                || other.starts_with("browser.")
+                || other.starts_with("cron.")
+                || other.starts_with("weather.")
+                || other.starts_with("translate.")
+                || other.starts_with("image.") =>
+        {
+            other.split('.').next().unwrap_or(other).into()
+        }
         other => other.replace('.', "_"),
     }
 }
@@ -272,12 +298,48 @@ mod tests {
     fn normalize_tool_ids() {
         assert_eq!(normalize_tool_id("web.search"), "web_search");
         assert_eq!(normalize_tool_id("github"), "github");
-        assert_eq!(normalize_tool_id("notion.search"), "notion_search");
+        assert_eq!(normalize_tool_id("github.list_issues"), "github");
+        assert_eq!(normalize_tool_id("notion.search"), "notion");
+        assert_eq!(
+            normalize_tool_id("obsidian.search_notes"),
+            "obsidian_search"
+        );
+        assert_eq!(normalize_tool_id("terminal.run"), "terminal");
     }
 
     #[test]
     fn parse_tool_output_json_or_text() {
         assert_eq!(parse_tool_output(r#"{"ok":true}"#)["ok"], true);
         assert_eq!(parse_tool_output("plain"), serde_json::json!("plain"));
+    }
+
+    #[test]
+    fn mcp_does_not_retry_raw_id_after_security_blocks() {
+        let security = ToolsetError::SecurityBlocked {
+            patterns: vec!["ignore".into()],
+            score: 0.9,
+        };
+        let command = ToolsetError::CommandNotApproved {
+            command: "rm -rf /".into(),
+            level: "Dangerous".into(),
+            reason: "blocked".into(),
+        };
+        let not_found = ToolsetError::ExecutionFailed("工具未找到".into());
+
+        assert!(!should_retry_raw_tool_id(
+            "terminal.run",
+            "terminal",
+            &security
+        ));
+        assert!(!should_retry_raw_tool_id(
+            "terminal.run",
+            "terminal",
+            &command
+        ));
+        assert!(should_retry_raw_tool_id(
+            "custom.tool",
+            "custom_tool",
+            &not_found
+        ));
     }
 }

@@ -9,7 +9,7 @@ FairyField can coordinate a bounded development loop for project work. The loop 
 | ManagerAgent | Converts the user goal into scoped tasks, owners, allowed files, forbidden files, and verification commands. |
 | CodingAgent | Dispatches a configured coding CLI (`claude-code`, `kilocode`, or `opencode`) through `CodingAgentManager`. |
 | TestingAgent | Runs allowlisted verification commands without a shell and captures capped stdout/stderr evidence. |
-| GoalAgent | Compares requirements against coding and testing evidence before declaring success. |
+| GoalAgent | Compares requirements against coding, Git changed-file evidence, scope rules, and testing evidence before declaring success. |
 
 ## Task Schema
 
@@ -68,6 +68,9 @@ await developmentLoopPlan(
 - Shell metacharacters such as `;`, `|`, `&`, backticks, redirects, and newlines are rejected.
 - Context files reject `..` path traversal.
 - Coding agents inherit the existing `CodingAgentManager` cwd validation, permission-mode allowlist, timeout kill, and output caps.
+- CodingAgent output is not trusted by itself. The loop records changed files from `git status --short` and adds them to the stage artifacts.
+- If a CodingAgent changes files outside the assigned `files_allowed` scope, the CodingAgent stage fails and the loop stops before tests.
+- If tests fail and another iteration is available, the next CodingAgent prompt includes the capped failed test output.
 - Rust test commands run from `src-tauri` when the loop starts at the project root; npm commands run from the frontend root.
 - The loop never runs `npm run tauri build`.
 - Dry runs always return `success: false` because they prove only the plan shape.
@@ -79,6 +82,8 @@ A loop report is successful only when:
 1. A CodingAgent stage passes.
 2. A TestingAgent stage passes.
 3. The GoalAgent finds no unmet requirements.
-4. The report includes `AgentResult` evidence for the stages.
+4. Git-detected changed files exist for the CodingAgent stage.
+5. Git-detected changed files are inside the assigned scope.
+6. The report includes `AgentResult` evidence for the stages.
 
 If any condition is missing, `unmet_requirements` and `next_actions` explain what still needs work.

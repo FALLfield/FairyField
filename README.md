@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Vue-3.5-green?logo=vue.js" alt="Vue">
   <img src="https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri" alt="Tauri">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
-  <img src="https://img.shields.io/badge/Tests-482%20passed-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-507%20passed-brightgreen" alt="Tests">
 </p>
 
 ## 为什么是 FairyField？
@@ -31,7 +31,7 @@
 | 🧠 **AI 灵魂** | Claude / GPT 驱动，自主工具调用，情感陪伴对话 |
 | 💬 **语音输入** | 点击麦克风说话，自动转文字 → AI 回复 → 语音朗读 |
 | 📝 **长期记忆** | 4 层记忆堆栈 + 时序知识图谱 + 向量语义搜索 |
-| 🧰 **全能工具** | 文件、Git、Web/天气、网页抓取、Obsidian、GitHub、MCP、社区插件与 Coding Agent 桥接 |
+| 🧰 **全能工具** | 文件、Git、Web/天气、网页抓取、Obsidian、GitHub、MCP、社区插件与 Coding Agent 桥接；IPC/MCP 统一走安全 Toolset |
 | 🔒 **隐私优先** | 语音 100% 离线处理，记忆存在本地 SQLite |
 | 🪟 **桌面覆盖** | 透明置顶窗口，点击穿透，不干扰工作 |
 | 🛡️ **安全防护** | Prompt 注入检测 + 命令白名单 + 密钥自动脱敏 |
@@ -74,7 +74,7 @@ bash scripts/download-models.sh
 npm run tauri dev
 ```
 
-> 启用真实离线语音引擎：`cd src-tauri && cargo build --features sherpa-onnx`
+> 启用真实离线语音引擎（开发运行）：`npm run tauri -- dev --features sherpa-onnx`
 
 ## 使用
 
@@ -138,6 +138,8 @@ cargo check          # 编译检查
 cargo test           # Rust 测试
 cargo clippy         # Lint
 ```
+
+语音调试重点：启用 `sherpa-onnx` 后，麦克风输入会从系统默认设备捕获真实音频，自动下混到 mono、重采样到 16 kHz，并在静音/过短时返回清晰错误，而不是把空音频送进 ASR。
 
 ## 项目状态
 

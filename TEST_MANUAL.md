@@ -1,6 +1,6 @@
 # FairyField Manual Test Checklist
 
-> v1.0.0 release candidate, verified 2026-06-06. Automated baseline: 382 Rust tests + 100 frontend tests = 482 passed. With `sherpa-onnx`, the Rust suite has 384 tests.
+> v1.0.0 release candidate, verified 2026-07-08. Automated baseline: 405 Rust tests + 102 frontend tests = 507 passed. With `sherpa-onnx`, the Rust suite has 407 tests.
 
 ## 1. Automated Preflight
 
@@ -25,8 +25,8 @@ cargo clippy --features sherpa-onnx -- -D warnings
 
 Expected:
 
-- Frontend: 9 files, 100 tests passed.
-- Rust: 382 tests passed by default; 384 tests passed with `sherpa-onnx`.
+- Frontend: 9 files, 102 tests passed.
+- Rust: 405 tests passed by default; 407 tests passed with `sherpa-onnx`.
 - No clippy warnings in default or `sherpa-onnx` builds.
 
 ## 2. Desktop Smoke Test
@@ -68,6 +68,8 @@ With models installed under `~/.fairyfield/models/`:
 - VAD detects speech start/stop.
 - ASR returns recognized text into the chat input.
 - Matcha bilingual TTS plays the assistant reply when models are installed; Kokoro and macOS voice remain fallbacks.
+- TTS does not read markdown/code fences, URLs, emotion tags, or development command snippets aloud.
+- ASR uses real microphone samples with `sherpa-onnx`, rejects silence/too-short captures, and never recognizes from an empty buffer.
 - Missing models fall back cleanly without crashing text chat.
 
 ## 5. Memory And Tools
@@ -78,14 +80,24 @@ Check from chat or developer mode:
 - Memory search wraps recalled context in `<memory-context>`.
 - Tool list includes builtins, MCP-related tools, and community plugin surfaces.
 - `fairy.execute_tool` returns a real tool result rather than a stub.
-- Unsafe shell commands are blocked by the command guard.
+- Unsafe shell commands are blocked by the command guard; the terminal tool does not run through `sh -c` and rejects interpreter/package-runner commands.
 - Asking for Chinese weather such as `澳门天气` returns a weather result or a clear weather-source fallback, never a panic.
 - After search/fetch/weather completes, the chat shows the tool result directly and the status badge returns to idle.
 - Asking `web_fetch` for a public page returns text within the tool timeout.
 - `web_fetch` rejects localhost, private IPs, unsupported schemes, and unsafe redirects.
 - Large web pages are capped and marked as truncated instead of blocking the agent loop.
 
-## 6. Release Gate
+## 6. Development Loop
+
+Run a dry-run plan from the frontend wrapper or IPC command:
+
+- `development_loop_plan` returns ManagerAgent, CodingAgent, TestingAgent, and GoalAgent tasks.
+- Dry runs return `success: false` with an unmet requirement explaining that no code/tests ran.
+- Non-dry-run loops include Git-detected changed files in CodingAgent artifacts.
+- If tests fail and iterations remain, the next CodingAgent prompt includes the previous failed test output.
+- GoalAgent fails when no Git-detected changed files exist or when changed files are outside `files_allowed`.
+
+## 7. Release Gate
 
 The build is release-ready when:
 

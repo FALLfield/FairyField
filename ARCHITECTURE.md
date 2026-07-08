@@ -27,12 +27,15 @@ FairyField v1.0.0 is a Tauri v2 desktop AI companion built with a Vue/Three.js f
 
 The frontend calls Rust through Tauri commands registered in `src-tauri/src/lib.rs`. User-facing config is redacted before it crosses into the frontend; API keys are stored separately under `~/.fairyfield/secrets.json`.
 
+Agent tool calls, `tools_execute`, and MCP `fairy_execute_tool` share the same `Toolset` execution path. That path applies prompt-injection checks, command-guard checks, tool validation, executor timeout handling, and UTF-8 safe output handling consistently instead of maintaining separate bypass-prone executors.
+
 ## Reference Integration
 
 FairyField v1 borrows the shape of Hermes Agent and MemPalace without carrying their Python runtime into the app.
 
 - Hermes-style tool execution is implemented through `Tool`, `ToolExecutor`, `ToolRegistry`, tool manifests, MCP transport/OAuth scaffolding, command guards, and Coding Agent subprocess control.
 - The web tools are production hardened for v1: generic search has reqwest + curl-backed upstream fallback, weather queries use dedicated weather sources before generic search, tool output is UTF-8 safe, and `web_fetch` has DNS timeouts, manual redirect validation, SSRF guards, and response-size caps.
+- The development loop is evidence-first: the CodingAgent stage records Git-detected changed files, stops on out-of-scope edits, retries with failed test output, and the GoalAgent fails if coding/test evidence is incomplete.
 - MemPalace-style memory is implemented through L0/L1/L2 wake-up context, L3 drawer recall, FTS5 with Chinese tokenization, temporal knowledge graph, duplicate prevention, verbatim writes, and an MCP-facing `AgentMemoryBackend`.
 - Remaining Phase 7+ work is deeper semantic parity: persistent real embedding indexes, richer memory mining/classification, and live third-party OAuth providers beyond config-gated tool surfaces.
 
@@ -51,11 +54,11 @@ Large downloaded ASR/TTS/VAD models are not committed. They are fetched with `sc
 Release verification for v1.0.0:
 
 - `npm run build`
-- `npm run test` — 100 frontend tests
+- `npm run test` — 102 frontend tests
 - `cargo check`
-- `cargo test` — 382 Rust tests
+- `cargo test` — 405 Rust tests
 - `cargo clippy -- -D warnings`
 - `cargo check --features sherpa-onnx`
-- `cargo test --features sherpa-onnx` — 384 Rust tests
+- `cargo test --features sherpa-onnx` — 407 Rust tests
 - `cargo clippy --features sherpa-onnx -- -D warnings`
 - `cargo fmt --check`

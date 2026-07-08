@@ -140,7 +140,12 @@ fn clean_tts_text(text: &str) -> String {
         }
     }
 
-    let mut result = lines.join(" ");
+    let mut result = lines
+        .into_iter()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !is_tts_artifact_fragment(line))
+        .collect::<Vec<_>>()
+        .join(" ");
 
     // 移除内部控制标签和工具标签
     let emotion_re = regex_lite::Regex::new(r"\[emotion:[^\]]+\]").unwrap();
@@ -153,6 +158,12 @@ fn clean_tts_text(text: &str) -> String {
     result = url_re.replace_all(&result, "").to_string();
     let inline_code_re = regex_lite::Regex::new(r"`[^`]*`").unwrap();
     result = inline_code_re.replace_all(&result, "").to_string();
+    let json_like_re = regex_lite::Regex::new(r#"\{[^{}]{1,300}\}"#).unwrap();
+    result = json_like_re.replace_all(&result, "").to_string();
+
+    let artifact_sentence_re =
+        regex_lite::Regex::new(r"(运行|命令|执行|command|run)[:：][^。！？.!?]*").unwrap();
+    result = artifact_sentence_re.replace_all(&result, "").to_string();
 
     // 移除 markdown 粗体/斜体标记
     result = result.replace("**", "");
@@ -196,6 +207,50 @@ fn clean_tts_text(text: &str) -> String {
     result = whitespace_re.replace_all(&result, " ").to_string();
 
     result.trim().to_string()
+}
+
+fn is_tts_artifact_fragment(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let command_starts = [
+        "运行:",
+        "运行：",
+        "命令:",
+        "命令：",
+        "command:",
+        "run:",
+        "执行:",
+        "执行：",
+    ];
+    if command_starts
+        .iter()
+        .any(|prefix| lower.trim_start().starts_with(prefix))
+    {
+        return true;
+    }
+
+    let command_terms = [
+        "cargo ",
+        "npm ",
+        "pnpm ",
+        "yarn ",
+        "git ",
+        "rustc ",
+        "node ",
+        "python ",
+        "python3 ",
+        "tauri ",
+        "--features",
+        "-- ",
+    ];
+    if command_terms.iter().any(|term| lower.contains(term)) {
+        return true;
+    }
+
+    let file_path_re = regex_lite::Regex::new(
+        r"(^|[\s（(])([./~]?[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,8}",
+    )
+    .unwrap();
+    file_path_re.is_match(text)
 }
 
 fn split_tts_utterances(text: &str) -> Vec<String> {
@@ -973,6 +1028,29 @@ mod tests {
         assert!(segments[1].text.contains("Natasha"));
         assert_eq!(segments[2].text.trim(), "今天");
         assert!(segments[3].text.contains("OK"));
+    }
+
+    #[test]
+    fn sanitizer_removes_developer_artifacts_without_eating_natural_text() {
+        let cleaned = super::clean_tts_text(
+            r#"
+            好的，我会检查 `src-tauri/src/voice/tts.rs`。
+            ```json
+            {"api_key":"secret","ok":true}
+            ```
+            运行: cargo test --features sherpa-onnx && npm run build
+            详情见 https://example.com/docs?q=1。
+            版本 v1.0.0，完成度 95%。
+            "#,
+        );
+
+        assert!(!cleaned.contains("src-tauri"));
+        assert!(!cleaned.contains("cargo test"));
+        assert!(!cleaned.contains("https"));
+        assert!(!cleaned.contains('{'));
+        assert!(!cleaned.contains('&'));
+        assert!(cleaned.contains("好的，我会检查"));
+        assert!(cleaned.contains("版本 v1.0.0，完成度 95%。"));
     }
 
     #[cfg(feature = "sherpa-onnx")]

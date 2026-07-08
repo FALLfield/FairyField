@@ -140,6 +140,7 @@ mod tests {
     fn make_toolset() -> Toolset {
         let executor = Arc::new(ToolExecutor::new());
         executor.register_tool(Arc::new(EchoTool));
+        executor.register_tool(Arc::new(crate::tools::builtins::shell::ShellTool::new()));
         Toolset::new(
             executor,
             Arc::new(CommandGuard::new()),
@@ -181,13 +182,21 @@ mod tests {
     async fn shell_command_blocked_when_dangerous() {
         let toolset = make_toolset();
         let input = r#"{"command": "rm -rf /"}"#;
-        let result = toolset.execute("shell", input).await;
-        // shell tool is not registered, but guard check should fail first
-        // Actually, since "shell" is not registered, it will hit ToolNotFound
-        // The guard check only applies if the tool IS shell AND the command is parsed.
-        // Since we don't register ShellTool here, this tests that the tool-not-found
-        // path is reached (guard check passes but executor fails).
-        assert!(result.is_err());
+        let result = toolset.execute("terminal", input).await;
+        assert!(matches!(
+            result,
+            Err(ToolsetError::CommandNotApproved { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn terminal_interpreter_blocked_even_after_guard_approval() {
+        let toolset = make_toolset();
+        toolset.guard.approve("python3", true);
+        let result = toolset
+            .execute("terminal", r#"{"command": "python3 -c print(1)"}"#)
+            .await;
+        assert!(matches!(result, Err(ToolsetError::ExecutionFailed(_))));
     }
 
     #[test]
