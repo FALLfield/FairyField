@@ -24,7 +24,7 @@ V2 does not begin by pursuing 135 tools, ChatGPT Voice equivalence, autonomous s
 
 ### The concurrency contract
 
-For an approved complex mission, FairyField starts with **12 concurrent child agents**, plus one lead/integrator. Twelve is the minimum complex-mission capacity target, not a permanent project-owned upper bound. The actual limit is the supported OMX runtime capacity that the lead has validated against the task graph, available model budget, integration bandwidth, and machine resources.
+For an approved complex mission, FairyField has an **initial configured capacity of up to 12 concurrent child agents**, plus one lead/integrator. Twelve is the first complex-mission capacity baseline, not a mandatory spawn count or a permanent project-owned upper bound. The lead activates only the smallest justified set of independent lanes. The actual limit is the supported OMX runtime capacity that the lead has validated against the task graph, available model budget, integration bandwidth, and machine resources.
 
 The team is deliberately elastic. Do not reserve a low fixed number such as four or six when the task graph warrants more coverage, and do not manufacture twelve tasks merely to fill the budget.
 
@@ -89,7 +89,18 @@ Implementation can use many builders. Review must also scale with risk:
 | Security, memory migration, credentials, destructive work | One tester, one security/behaviour reviewer, one requirements reviewer, and a final verifier |
 | Public release | Full test owner, security reviewer, documentation/reality reviewer, and release verifier |
 
-The current installed OMX guidance still contains a six-child default. Treat that as a migration blocker, not a suggestion to ignore. Configure the supported `[agents] max_threads = 12` initial setting, regenerate or merge OMX project guidance, and run `omx doctor` before starting a 12-child mission. If the runtime cannot honour it, use the largest supported capacity and schedule waves. If it can safely support more, the lead may raise the configured limit after documenting the task budget and capacity smoke evidence.
+The tracked project guidance, portable `.codex/config.template.toml`, and effective ignored local OMX configuration must agree before a complex mission starts. The portable baseline is `[agents] max_threads = 12`; merge it into local config before project setup, then verify that the policy remains present after any OMX setup or guidance regeneration and run `omx doctor` plus a bounded capacity smoke test. Treat `max_threads` as a global fleet budget, never as twelve children for every parent. Setup or doctor success alone does not prove that twelve useful lanes can run safely. If the runtime cannot honour the configured baseline, use the largest verified capacity and schedule waves. If it safely supports more, the lead may raise the project setting through supported configuration after documenting the task budget, integration plan, machine capacity, and smoke evidence.
+
+### Capacity evidence and stop conditions
+
+GOV-003 is admitted in stages. A valid TOML file proves only that the configured policy parses. A three-lane isolated-worktree run proves only that the team path works at three lanes. Before a mission relies on twelve children, run a no-write, disposable-worktree smoke with twelve bounded lanes and record the following:
+
+- The planned lane count, roles, model budget, and one owner for integration.
+- A machine baseline and abort threshold for CPU, memory, disk, and available model quota.
+- Worker start, completion, cancellation, and cleanup evidence, including a clean `git status` afterward.
+- No shared writes, no unapproved external side effects, and no session-specific overlay committed to the branch.
+
+Do not launch twelve agents merely to satisfy a number. Until this smoke passes, treat twelve as a configured target and use the largest lower capacity that has been verified for the task, split into waves where needed.
 
 ## 📍 Priorities and functional-first roadmap
 
@@ -254,7 +265,7 @@ M0 establishes the conditions for fast, safe parallel work.
 |---|---|---|---|
 | GOV-001 | P0 | Recoverable pre-V2 checkpoint | Clean-clone restoration report |
 | GOV-002 | P0 | One English documentation authority | No conflicting mandatory rules |
-| GOV-003 | P0 | OMX capacity set to 12 child agents | Supported config, regenerated guidance, and `omx doctor` evidence |
+| GOV-003 | P0 | Initial OMX capacity set to 12 child agents with evidence-based scaling | Portable config template, matching local effective config and tracked guidance, `omx doctor`, and bounded capacity smoke evidence |
 | ARC-001 | P0 | Shared request/tool/voice event schema | Rust and TypeScript contract tests |
 | ARC-002 | P0 | Error taxonomy and cancellation lifecycle | No hidden error or post-cancel side effect |
 | TST-001 | P0 | AgentBench manifest, fixtures, and runner | First deterministic cases pass in CI |
@@ -412,10 +423,10 @@ Update `docs/v2/STATUS.md` after each integration with current commit, verified/
 ### Every OMX session
 
 1. Confirm branch, worktree, `STATUS.md`, and the current task's evidence contract.
-2. Run `omx doctor` when using OMX team orchestration; confirm actual runtime capacity and task budget before allocating more than six child agents.
+2. Run `omx doctor` when using OMX team orchestration; confirm the tracked policy, actual verified runtime capacity, task budget, and relevant capacity-smoke evidence before allocating children.
 3. Choose the highest-priority ready task whose dependencies are satisfied.
 4. Decide direct execution, `$ralplan`, `$team`, or `$ralph` from the task graph.
-5. Allocate the smallest useful agent budget, starting at 12 for a justified complex mission and scaling only to the validated runtime-supported capacity.
+5. Allocate the smallest useful agent budget. For a complex mission, use up to the configured 12 only after the bounded smoke has validated that capacity; otherwise use the largest lower verified capacity and schedule waves.
 6. Add or update automated tests before implementation, then run the appropriate gates.
 7. Use independent review and requirement verification; do not let builders approve their own completion.
 8. Integrate, record evidence, update `STATUS.md`, and leave failed work visible rather than silently discarded.

@@ -131,6 +131,7 @@ config.json
 *.7z
 .omx/
 .codex/*
+!.codex/config.template.toml
 !.codex/agents/
 !.codex/agents/**
 !.codex/skills/

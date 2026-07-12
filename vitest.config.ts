@@ -7,6 +7,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: [],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/**', '**/.omc/**'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.claude/**',
+      '**/.omc/**',
+      '**/.codex/**',
+      '**/.omx/**',
+    ],
   },
 });

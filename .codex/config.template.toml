@@ -1,0 +1,8 @@
+# Copy these settings into the local .codex/config.toml before using OMX.
+# Keep local marketplace paths, hook trust, and authentication out of Git.
+# The lead still chooses the actual child-agent budget from independent lanes,
+# model budget, runtime support, integration bandwidth, and machine capacity.
+
+[agents]
+max_threads = 12
+max_depth = 2

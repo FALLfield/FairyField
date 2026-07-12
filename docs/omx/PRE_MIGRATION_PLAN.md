@@ -26,14 +26,14 @@ The migration is complete only when all of the following are true:
 
 | Item | Current fact | Migration consequence |
 |---|---|---|
-| Branch and remote | `main` equals `origin/main` | Start from the pushed checkpoint, not a private working tree |
-| Current commit | `238c1368ffb74dc49c220c51bf820a8b5fd78d55` | Record it in every migration and benchmark report |
-| V1 tag | `v1.0.0` at `25ecb6c`; six commits behind `main` | Preserve it as a historical release marker |
-| Working tree | Clean when this plan was reconciled | Any new change needs its own reviewed checkpoint |
+| Main and remote | `main` equals `origin/main` at `fd5b332` | Start V2 work from the pushed checkpoint, not a private working tree |
+| Pre-V2 checkpoint | Annotated tag `snapshot/pre-omx-v2-20260712` resolves to `fd5b332` | Recovery branch and snapshot preserve the handover point |
+| V1 tag | `v1.0.0` resolves to `25ecb6c`; seven commits behind `main` | Preserve it as a historical release marker |
+| Working tree at checkpoint | Clean before V2 work began | Each later integration needs its own reviewed checkpoint |
 | Application metadata | npm, Cargo, and Tauri still report `1.0.0` | Bump atomically only when the V2 branch is intentionally declared |
 | Existing agent loop | Hermes-style observation loop with bounded execution | Reuse tested pieces; do not call it Hermes parity |
-| Current OMX prompt rule | Generated `AGENTS.md` currently says six concurrent child agents | Raise the supported runtime and generated policy together before using the 12-agent operating model |
-| Current OMX config | No explicit `[agents]` section | Add an explicit concurrency setting during governance migration |
+| Project OMX prompt rule | Tracked `AGENTS.md` defines an initial capacity of up to 12 concurrent child agents with evidence-based scaling | Re-check the policy after setup or guidance regeneration |
+| Project OMX config | Tracked `.codex/config.template.toml` defines the initial `[agents] max_threads = 12` baseline; ignored local config merges it with machine-specific plugin state | Validate the effective runtime and use waves when the full configured capacity is not supported |
 | Test reality | Automated tests exist, but there is no complete product capability benchmark | Build a deterministic AgentBench before treating feature claims as release evidence |
 
 The following boundaries are compatibility assets, not disposable implementation details:
@@ -170,9 +170,9 @@ Retire contradictory rules instead of letting them coexist. In particular:
 
 ### Initial capacity: twelve concurrent child agents, dynamically scalable
 
-V2 starts with an **initial complex-mission capacity of 12 concurrent child agents**, plus the lead/integrator. Twelve is a required improvement over the current six-child rule, not a permanent project ceiling. The actual ceiling is the supported OMX runtime capacity that the lead has validated against the task graph, model budget, integration bandwidth, and local machine resources.
+V2 starts with an **initial configured complex-mission capacity of up to 12 concurrent child agents**, plus the lead/integrator. Twelve is an improvement over the current six-child default and a capacity baseline, not a mandatory spawn count or a permanent project ceiling. The lead activates only the smallest justified set of independent lanes. The actual ceiling is the supported OMX runtime capacity that the lead has validated against the task graph, model budget, integration bandwidth, and local machine resources.
 
-The installed OMX-generated `AGENTS.md` currently contains a six-child rule. P2 must make the runtime and generated guidance agree before the initial 12-agent model is used:
+The tracked `AGENTS.md`, portable `.codex/config.template.toml`, and effective ignored local OMX configuration must agree before the initial 12-agent model is used. The portable baseline is:
 
 ```toml
 [agents]
@@ -180,7 +180,7 @@ max_threads = 12
 max_depth = 2
 ```
 
-Use supported OMX setup/configuration to apply the setting, then run `omx setup --scope project --merge-agents` and `omx doctor`. Do not hand-edit setup-owned native-agent files. If the installed OMX version still regenerates a six-child instruction or cannot honour 12 threads, record that as a blocker and schedule the mission in waves. If hardware, budget, and the verified runtime support more than 12, raise the supported configuration through the same documented path; never silently exceed the runtime limit.
+Copy or merge the portable template into the ignored local `.codex/config.toml` before applying the setting. Keep local marketplace paths, hook trust, runtime state, and authentication out of Git. Treat `omx setup --scope project --merge-agents` as a mutating regeneration: stop active teams, use a clean disposable worktree, and inspect the `AGENTS.md` and local config diff before adopting it. Do not hand-edit setup-owned native-agent files. Re-read the tracked guidance after regeneration because setup or doctor success alone does not prove policy alignment or safe concurrency. The installed OMX generator may still supply a six-child default when settings are absent, so the explicit project configuration and root policy must be rechecked together. Interpret `max_threads` as a global fleet budget, not twelve children per parent. If the installed OMX version rewrites a conflicting limit or cannot honour 12 threads, record that as a blocker and schedule the mission in waves. If hardware, budget, and the verified runtime support more than 12, raise the project configuration through the same documented path; never silently exceed the verified runtime limit.
 
 ### Capacity planning rules
 
@@ -203,14 +203,14 @@ Planning has one accountable plan owner. Independent researchers or architects m
 
 ### Documentation and generated-file boundary
 
-Track project-owned OMX configuration, the root `AGENTS.md` policy, and non-rebuildable project templates. Keep runtime state, logs, sessions, caches, local marketplace paths, databases, models, and temporary reports out of Git. Determine whether generated native-agent definitions are tracked only after a clean-clone regeneration exercise proves the boundary.
+Track the portable OMX configuration template, the root `AGENTS.md` policy, and non-rebuildable project templates. Keep resolved local config, runtime state, logs, sessions, caches, local marketplace paths, databases, models, and temporary reports out of Git. Determine whether generated native-agent definitions are tracked only after a clean-clone regeneration exercise proves the boundary.
 
 The V2 authoritative documentation set is deliberately small:
 
 | Document | Purpose | Update trigger |
 |---|---|---|
 | `README.md` | Publicly true product entry point | Release candidate |
-| `AGENTS.md` | OMX and engineering contract | Workflow change |
+| `AGENTS.md` | OMX and engineering contract, including the initial 12-child capacity and scaling conditions | Workflow or supported-capacity change; re-check after regeneration |
 | `docs/v2/PRODUCT.md` | Users, outcomes, non-goals, acceptance | Product decision |
 | `docs/v2/ARCHITECTURE.md` | Boundaries, contracts, ADR index | Architecture decision |
 | `docs/v2/ROADMAP.md` | Milestones and dependencies | Milestone change |
@@ -332,7 +332,7 @@ Enter day-to-day OMX development only after every item is true:
 - [ ] `v1.0.0` is unchanged
 - [ ] Secrets, user data, models, logs, and build artefacts are excluded from the checkpoint
 - [ ] OMX setup and doctor pass on a clean checkout
-- [ ] Runtime configuration and generated guidance permit an initial 12 child agents and a documented path to runtime-supported scaling, or a documented wave plan is in place
+- [ ] The portable configuration template, effective local runtime configuration, and generated guidance permit an initial configured capacity of up to 12 child agents; a bounded twelve-lane smoke has recorded its limits; and a documented wave plan is in place for any unverified or over-capacity mission
 - [ ] Every parallel lane has a bounded scope, base commit, clean worktree, owner, test evidence, and integration owner
 - [ ] One English authority chain exists; local translations cannot override it
 - [ ] The AgentBench manifest, deterministic fixtures, and first 24 cases are runnable in CI
