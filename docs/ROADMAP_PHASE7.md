@@ -1,6 +1,34 @@
 # FairyField Phase 7 Roadmap
 
-> Version 1 is a publishable desktop companion baseline. Phase 7 turns it from a working MVP into a low-latency, embodied, research-ready companion platform.
+> Version 1 is a strong repository baseline and release candidate, not a fully polished public product yet. Phase 7 must close the real task, voice, memory, and tool gaps before the app should be marketed as a complete companion.
+
+Reality checkpoint, 2026-07-10: v1 has a strong automated-test baseline, but the user's latest manual findings show that three areas must be treated as unfinished before adding more surface area: task completion after tool use, real voice/STT quality, and memory/tool parity with Hermes and MemPalace. See `docs/REALITY_CHECK.md` for the current bug list.
+
+## 0A. Close Security And State Semantics
+
+**Goal:** no tool, memory, or UI flow may claim safety while using a disconnected guard or trusting untrusted content.
+
+- Share one CommandGuard between IPC approval and real Toolset execution.
+- Replace Git prefix matching with exact read-only operations.
+- Canonicalize file paths and defend symlink containment.
+- Treat user input, web pages, tool output, and recalled memory as untrusted data with provenance.
+- Add automatic secret redaction and private local credential permissions.
+- Implement request-correlated streaming, backend abort, backend clear, and explicit persisted-memory controls.
+
+**Acceptance target:** unsafe Git/file/memory prompts are blocked, approval affects the actual command, abort stops backend work, and clear removes exactly the selected state.
+
+## 0B. Close The Actual Task Loop
+
+**Goal:** Fairy must finish the user's requested action, not merely return the first useful tool result.
+
+**Core loop update (2026-07-12):** PrimaryAgent now treats every tool result as an observation and continues until a no-tool response or bounded finalization. Regression coverage proves search, write, read-back verification, error recovery, duplicate blocking, and truthful incomplete fallbacks.
+
+- Add an independent semantic Goal verifier instead of relying only on the model's completion decision.
+- Add request cancellation, provider retry/failover, and tool-pair-aware context compaction.
+- Add safe parallel execution for proven-independent read operations.
+- Route long coding/project tasks into the Manager/Coding/Testing/Goal development loop.
+
+**Acceptance target:** "Search the web for X and create a markdown file on my Desktop" creates the file, verifies it exists, and returns the Desktop path.
 
 ## 1. Streaming Voice Input And Output
 
@@ -32,11 +60,27 @@
 
 - Prioritize the tools people will actually use daily: browser/page reading, web search, weather, files, Git, Obsidian, reminders, email/calendar, and coding agents.
 - Add a tool test harness that runs configured, unconfigured, offline, and unsafe-input scenarios for every tool.
+- Replace false-ready scaffold responses with real execution or explicit unsupported status.
 - Make tool results visible immediately in chat when they are already user-facing.
 - Expand MCP import/export so Fairy can use external tools and external agents can use Fairy memory.
 - Add per-tool permission UI: read-only, write-local, network, shell, OAuth, and destructive.
 
 **Acceptance target:** every registered tool either executes, returns a clear configuration-required message, or is blocked by security policy within the configured timeout.
+
+This acceptance target must not treat network_call skipped or queued-without-side-effect as execution.
+
+## 3A. Release Engineering
+
+**Goal:** convert the source candidate into a reproducible, installable release.
+
+- Fix CI toolchain and Cargo.lock audit paths, then require a green tagged commit.
+- Decide whether official builds include sherpa-onnx and make documentation match the package.
+- Add model-health reporting and a supported model installation path.
+- Produce signed and notarized macOS artifacts.
+- Either verify Windows/Linux behavior or remove those platforms from v1 claims.
+- Test clean install, first run, upgrade, uninstall, and Gatekeeper behavior.
+
+**Acceptance target:** the tagged commit has green CI and signed artifacts that install and launch on every advertised platform.
 
 ## 4. UI Refinement
 

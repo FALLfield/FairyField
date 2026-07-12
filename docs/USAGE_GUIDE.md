@@ -1,12 +1,12 @@
 # FairyField 用户指南
 
-> FairyField 是一个有灵魂的桌面 AI 伴侣 — 她悬浮在你的桌面上，记得你的烦恼，会用真实的声音跟你聊天。
+> FairyField 的目标是成为有灵魂的桌面 AI 伴侣。当前版本是源码级发布候选；默认 build 的真实语音、长期记忆质量和工具闭环仍有限制，请先阅读本文和 REALITY_CHECK。
 
 ## 快速开始
 
 ### 环境要求
 
-- **Rust** 1.85+
+- **Rust** 1.88+
 - **Node.js** 20+
 - **macOS** 14+（Windows/Linux 实验性支持）
 - ~2GB 磁盘空间（含模型）
@@ -16,7 +16,7 @@
 ```bash
 # 克隆项目
 git clone https://github.com/fallfield/FairyField.git
-cd FairyField/FairyField
+cd FairyField
 
 # 安装前端依赖
 npm install
@@ -75,18 +75,18 @@ FairyField 支持离线语音处理：
 
 | 引擎 | 类型 | 状态 | 需要模型 |
 |------|------|------|----------|
-| Matcha bilingual | TTS（文字→语音） | ✅ 默认 | 中文 `matcha-icefall-zh-baker` + 英文 `matcha-icefall-en_US-ljspeech` + `vocos-22khz-univ.onnx` |
-| Kokoro | TTS（文字→语音） | ✅ 兜底 | `model.onnx` + `voices.bin` + lexicon/rule FST |
-| Paraformer | ASR（语音→文字） | ✅ 支持 | `sherpa-onnx-paraformer-zh` 目录 |
-| Silero VAD | 语音活动检测 | ✅ 支持 | `silero-vad.onnx` |
-| MacSayTts | TTS（仅 macOS） | ✅ 内置 | 无需模型 |
+| Matcha bilingual | TTS（文字→语音） | Feature build 优先 | 中文 `matcha-icefall-zh-baker` + 英文 `matcha-icefall-en_US-ljspeech` + `vocos-22khz-univ.onnx` |
+| Kokoro | TTS（文字→语音） | Feature build fallback | `model.onnx` + `voices.bin` + lexicon/rule FST |
+| Paraformer | ASR（语音→文字） | Feature build 单次三秒录音 | `sherpa-onnx-paraformer-zh` 目录 |
+| Silero VAD | 语音活动检测 | 引擎存在，capture 未接线 | `silero-vad.onnx` |
+| MacSayTts | TTS（仅 macOS） | 普通 build 默认 | 无需模型 |
 
 启用真实语音引擎：
 ```bash
 npm run tauri -- dev --features sherpa-onnx
 ```
 
-不启用 `sherpa-onnx` feature 时，TTS 回退到 macOS `say` 命令，ASR/VAD 使用 Mock 引擎。启用后默认优先 Matcha 双语低延迟 TTS；缺少 Matcha 模型时回退到 Kokoro，再回退到平台默认。
+不启用 sherpa-onnx feature 时，macOS TTS 回退到系统 say，ASR 返回空结果，VAD 也没有可用的实时检测。启用后才会尝试 Matcha、Kokoro、Paraformer 和 Silero；模型缺失时部分引擎会静默回退，因此启动日志和模型健康检查非常重要。
 
 更多本地语音方案、延迟原因和模型选择见 `docs/LOCAL_TTS.md`。
 
@@ -148,7 +148,7 @@ Tauri IPC 通信层
 ├── 语音管道（sherpa-onnx）       ← ASR + TTS + VAD
 ├── 记忆系统（SQLite + FTS5）     ← 4 层记忆 + 知识图谱
 ├── 安全体系                        ← 注入防护 + 命令守卫
-└── 通信网关（Discord Webhook）    ← 手机伴侣通知
+└── 通信网关 scaffold              ← Webhook/Cron 启动接线待完成
 ```
 
 ## 故障排除
@@ -161,7 +161,7 @@ Tauri IPC 通信层
 2. 检查是否安装了语音模型：`ls ~/.fairyfield/models/`
 3. 使用真实 ASR 时请用 `npm run tauri -- dev --features sherpa-onnx` 启动
 4. 静音或录音过短会返回明确错误，不会再把空音频送进识别器
-5. 未安装模型时 ASR 会返回固定文本，不影响文本聊天
+5. 未启用 feature 或未安装有效模型时，ASR 会返回空结果并显示识别失败；文本聊天仍可使用
 
 ### LLM 无响应
 1. 检查 API Key 环境变量是否设置：`echo $OPENAI_API_KEY`
@@ -189,8 +189,10 @@ npm run tauri build
 - Phase 0-4：✅ 已完成
 - Phase 4.5：✅ 已完成
 - Phase 5：✅ 已完成
-- Phase 6：✅ 已完成（含 v1 Web/工具/记忆硬化）
+- Phase 6：结构与自动化基线已完成；真实工具、语音、MCP、记忆和发布闭环仍需收尾
 - 全息模式：⏳ 延后
+
+当前版本应视为源码级发布候选。发布前请先阅读 docs/REALITY_CHECK.md，并完成其中的安全、语音、任务闭环、CI 和安装包验收。
 
 ## 获取帮助
 

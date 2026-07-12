@@ -2,6 +2,8 @@
 
 > FairyField 动画开发参考。每次修改 IdleAnimation 或新增动画时必读。
 
+> 状态说明：本文是设计参考，不是已通过的验收记录。当前 IdleAnimation 已实现手臂自然下垂、旋转式呼吸/摆动和随机手势，但没有使用本文建议的 scale 呼吸，也未与语音或情绪策略联动。PCM lip-sync 尚未接通，模拟口型仍有持续更新和闭嘴状态 bug。真实状态见 docs/REALITY_CHECK.md。
+
 ## 核心概念
 
 ### VRM T-Pose 问题

@@ -4,9 +4,9 @@ FairyField 支持通过 Discord 网关实现手机伴侣通信。本指南说明
 
 ## 当前状态
 
-目前 Discord 网关使用 **Webhook** 模式（已实现并测试通过）。完整的 Discord Bot 模式（serenity）需要 Bot Token，待后续版本实现。
+Webhook HTTP client code exists, but the running app initializes GatewayState with no DiscordGateway and never hydrates it from AppConfig. The documented webhook_url field is not part of the current GatewayConfig. Therefore chat-to-Discord notification is not currently configurable through this guide. Full Bot mode is also not implemented.
 
-## Webhook 模式（当前可用）
+## Webhook 模式（目标配置，尚未接入启动流程）
 
 ### 1. 创建 Discord Webhook
 
@@ -18,7 +18,7 @@ FairyField 支持通过 Discord 网关实现手机伴侣通信。本指南说明
 
 ### 2. 配置 FairyField
 
-将 Webhook URL 添加到 `~/.fairyfield/config.json`：
+The following is the target configuration shape. Adding it to `~/.fairyfield/config.json` does not work until GatewayConfig and startup wiring are implemented:
 
 ```json
 {
@@ -31,7 +31,7 @@ FairyField 支持通过 Discord 网关实现手机伴侣通信。本指南说明
 
 ### 3. 测试
 
-重启 FairyField，发送消息时观察 Discord 频道是否收到通知。
+Do not expect this test to pass yet. First wire GatewayState from configuration, add a safe connection test, and expose an enable/disable control.
 
 ## Bot 模式（未来版本，需 Bot Token）
 
@@ -67,10 +67,10 @@ Bot 模式支持双向通信 — 你可以从手机 Discord 客户端给 Fairy �
 ## 常见问题
 
 **Q: 消息发不出去？**
-A: 检查 Webhook URL 是否正确，频道是否仍然存在。
+A: 当前首先会遇到 GatewayState 未初始化的问题。完成启动接线后，再检查 Webhook URL 和频道状态。
 
-**Q: 手机能收到通知吗？**
-A: 是的，只要 Discord 手机版有通知权限，通过 Webhook 发送的消息会推送。
+**Q: 手机现在能收到通知吗？**
+A: 不能通过当前 FairyField 启动流程保证。Webhook client 单元代码存在，但运行时网关没有配置入口。
 
 **Q: 如何让 Fairy 主动发消息？**
-A: 在 `config.json` 中启用 `cron_enabled: true`，Fairy 会定时发送问候/提醒。
+A: 目前只存在内存 Cron 数据结构和 IPC CRUD；没有持久调度循环连接到 Discord 发送。该功能仍待实现。

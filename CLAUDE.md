@@ -16,32 +16,34 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 | 桌面容器 | Tauri v2 (Rust) | 透明窗口 + 置顶 + 点击穿透 |
 | AI 灵魂 | 原生 Function Calling | Agent Loop + LLM tool_use (OpenAI/Claude) |
 | LLM | 云端 API (OpenAI / Claude) | 质量优先，智能路由优化成本 |
-| ASR | sherpa-onnx (Paraformer) | 离线语音识别，Rust 原生绑定 |
-| TTS | sherpa-onnx (Matcha bilingual + Kokoro fallback) | 低延迟中英双语离线语音合成，纯 Rust |
-| VAD | sherpa-onnx (silero-vad) | 语音活动检测 |
-| 持久化 | rusqlite (SQLite + FTS5 + sqlite-vec) | 长期记忆 + 向量索引 + 知识图谱 |
-| 向量搜索 | sqlite-vec + ONNX Runtime | 本地 embedding，零 API 调用 |
-| 技能系统 | TOML + Markdown | 渐进式披露，自创建/修补 |
-| Claude Code 集成 | MCP Server | 记忆暴露为 Claude Code 工具 |
-| 通信网关 | Discord Bot (serenity) | 手机伴侣通信 |
-| 安全 | 多层防护 | Prompt 注入防护 + 命令守卫 + 秘密脱敏 |
+| ASR | Feature build: sherpa-onnx Paraformer | 普通 build 为 empty Mock；当前固定三秒录音 |
+| TTS | Feature build: Matcha/Kokoro；普通 macOS build: say | 流式首句、barge-in 和多语质量未完成 |
+| VAD | sherpa-onnx Silero 模块 | 引擎可初始化，但未接 microphone capture |
+| 持久化 | rusqlite (SQLite + FTS5) | drawer 记忆 + 独立知识图谱 CRUD |
+| 向量搜索 | 占位实现 | 当前为进程内伪向量，未接 ONNX/sqlite-vec |
+| 技能系统 | SQLite CRUD | 尚未接入正常 Agent 自我改进闭环 |
+| Coding 集成 | Tauri IPC facade + CLI bridge | 尚无外部 MCP 协议 server；尚不支持 Codex CLI |
+| 通信网关 | Discord webhook + Cron 基础模块 | 完整 Bot/平台通信仍待实现 |
+| 安全 | 模块存在，端到端未闭环 | 注入检测、命令守卫、脱敏存在；Git mutation/output 已收紧，共享审批、file 边界、记忆隔离待修 |
 | 全息 | 透视追踪（Phase 4） | 硬件后续再 DIY |
 
 **零 Python 依赖。** 整个技术栈是 Rust + TypeScript。
 
 **当前仓库内的架构说明以 `README.md`、`ARCHITECTURE.md`、`PROJECT_STRUCTURE.md`、`docs/USAGE_GUIDE.md` 和源码模块为准。**
 
-## Current Phase: v1.0.0 发布候选 ✅ Phase 6 完成 + v1 工具/记忆硬化
+## Current Phase: v1.0.0 源码级发布候选，Phase 6 结构完成，产品闭环未完成
+
+> 真实状态以 `docs/REALITY_CHECK.md` 和源码为准。Phase 6 的目录、类型和基础设施已经落地，但不能据此推断全部第三方工具、外部 MCP、语义向量、语音闭环、个性化或开发闭环已经达到产品可用状态。
 
 ### Release State (2026-05-28)
 
-- ✅ Phase 0-5 已完成：桌面容器、3D 角色、语音管道、记忆、Agent Loop、MVP 发布资料。
-- ✅ Phase 6 已完成：UI 分层、工具系统、用户引导、Coding Agent、MCP 双向集成、社区插件和共享记忆后端。
+- ✅ Phase 0-5 的目录、核心类型、桌面容器、3D 角色、基础 Agent/记忆/语音模块和 MVP 文档已落地；真实端到端验收仍有缺口。
+- ✅ Phase 6 结构已落地：UI 分层、21 个运行时工具定义、用户引导、Coding CLI bridge、IPC memory facade、社区插件 metadata 和共享记忆类型。
 - ✅ v1 硬化已完成：Web/weather 工具、网页抓取、UTF-8 截断、工具超时和 MemPalace 风格 wake-up/去重已补强。
 - ✅ v1 closure hardening 已完成：真实麦克风 ASR 捕获/重采样、TTS 开发文本清洗、Tools IPC/MCP 共享 Toolset、终端直执行安全收紧、Development Loop Git 证据门。
 - ✅ 版本已统一到 `1.0.0`：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
 - ✅ 默认模型路径指向仓库内可用资源：`public/models/default/2031903848872972007.glb`。
-- ✅ 自动化测试：409 Rust + 102 Frontend = 511 default tests passed；`sherpa-onnx` feature 下 411 Rust tests passed。
+- ✅ 自动化测试：425 Rust + 102 Frontend = 527 default tests passed；`sherpa-onnx` feature 下 427 Rust tests passed。
 - ✅ 发布前验证命令：`npm run build`、`npm run test`、`cargo fmt --check`、`cargo check`、`cargo test`、`cargo clippy -- -D warnings`、`cargo check --features sherpa-onnx`、`cargo test --features sherpa-onnx`、`cargo clippy --features sherpa-onnx -- -D warnings`。
 
 ### Phase 6 完成项
@@ -51,10 +53,10 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 | UI 优化 | ✅ | ControlPanel 左上角折叠；ChatPanel 纯对话；表情由全局情绪状态驱动；聊天点击不再被画布抢占。 |
 | 用户引导 | ✅ | 4 步 onboarding：名字、称呼偏好、性格、LLM 配置；配置保存到 `~/.fairyfield/user.json`。 |
 | 配置与密钥 | ✅ | API key 写入 `~/.fairyfield/secrets.json`，前端读取配置时自动脱敏。 |
-| 工具系统 | ✅ | ToolManifest、权限、Token 压缩、MCP 传输、OAuth、Composio、社区插件、内置工具集合。 |
-| Coding Agent | ✅ | Codex/KiloCode/OpenCode CLI 子进程管理，cwd/context 校验、超时、输出上限和权限白名单。 |
-| MCP Server | ✅ | 暴露 `fairy.execute_tool`、`fairy.get_context`、记忆搜索、wake-up、profile 等能力。 |
-| 共享记忆 | ✅ | `AgentMemoryBackend` 为外部 coding agents 提供上下文检索、去重写入和 diary 接口。 |
+| 工具系统 | ⚠️ Partial | 21 个工具注册；核心工具有真实逻辑，多个第三方工具、Browser、Cron、Composio 和社区插件仍为 scaffold。 |
+| Coding Agent | ⚠️ Partial | Claude/KiloCode/OpenCode 子进程 bridge 存在；交接时本机已有 Codex 但 bridge 未支持，且没有 UI、worktree、取消/恢复和真实 Goal 语义审计。 |
+| MCP | ⚠️ IPC only | 暴露 Tauri commands 和 schema，但没有 stdio/SSE/HTTP MCP handshake 或外部 client 连接。 |
+| 共享记忆 | ⚠️ Partial | `AgentMemoryBackend` 有单元测试，但没有生产调用方；向量 index 和外部 MCP 未接通。 |
 | 发布文档 | ✅ | README、CHANGELOG、CONTRIBUTING、USAGE_GUIDE 更新到 v1.0.0。 |
 | v1 工具/记忆硬化 | ✅ | 天气专用搜索路径、网页抓取安全重定向/DNS 超时/SSRF 防护、UTF-8 安全输出、真实 drawer 派生 wake-up 和保存前去重。 |
 
@@ -74,9 +76,24 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 - ✅ `fairy_execute_tool`、`tools_execute` 和 Agent Loop 共享 Toolset 安全路径。
 - ✅ Terminal 工具不再通过 `sh -c`，并拒绝 Python/Node/npm/pnpm/Cargo 等通用执行器入口。
 - ✅ Development Loop 不再信任 agent 自述；GoalAgent 要求 Git changed-file evidence，越界修改会失败。
+- ✅ PrimaryAgent 不再把 web/weather/Git 观察直接当作最终答案；12 轮 Hermes-style loop 支持错误恢复、重复调用限制、预算提示和 tool-free finalization。
+- ✅ 多步回归覆盖 web search → file write → file read verification → final response；Git 工具具有 function-calling schema，并拒绝 mutation、`--output`、`--no-index`、external diff/textconv 及其缩写形式。
+
+### 当前关键缺口（交接必读）
+
+- PrimaryAgent 的多步工具继续执行已修复，但完成判断仍依赖模型；没有独立语义 Goal verifier、request cancel、provider failover 或 tool-pair-aware context compaction。
+- Security IPC 与 Toolset 使用不同 CommandGuard，审批无法作用于真实工具执行；file/symlink containment 和 memory/tool-output 隔离仍未闭环。
+- 前端 abort 与 clear 只改本地状态，不能取消后端请求或清空后端 history。
+- 正常聊天的流式输出是完整回复后的两字符模拟，不是 provider streaming。
+- VAD 未接麦克风、PCM lip-sync 未接通，模拟嘴型存在只更新一次和不能完全闭合的风险。
+- UserConfig 与 soul/SOUL.md 未注入 PrimaryAgent；onboarding 个性化只保存不生效。
+- 记忆召回以 system role 注入，存在持久 prompt poisoning 风险；向量搜索生产 index 永远为空。
+- 外部 MCP、Composio、community plugin execution 和多数第三方工具仍未接通。
+- 详细证据、发布状态与修复顺序见 docs/REALITY_CHECK.md。
 
 ### 待后续（Phase 7+）
 
+0. **安全与任务闭环** — 共享 CommandGuard、file 安全、记忆 prompt poisoning、真实 abort/clear、语义 Goal verifier。
 1. **流式语音体验** — ASR partial、LLM token queue、首句 TTS、口型同步和延迟遥测。
 2. **语音质量修复** — Matcha/Kokoro/Paraformer/Silero 模型健康检查、TTS 清洗测试和语音设置 UI。
 3. **Hermes 级工具扩展** — 全工具 smoke harness、MCP 双向导入导出、权限 UI 和日常工具优先级。
@@ -88,12 +105,12 @@ FairyField 是一个**有灵魂的桌面 AI 伴侣**。她悬浮在你的桌面�
 
 - **Phase 0**：架构重建 ✅ 已完成
 - **Phase 1**：核心交互 ✅ 已完成
-- **Phase 2**：语音管道 + 灵魂骨架 ✅ 已完成（ASR/VAD/Matcha/Kokoro 取决于本地模型文件）
-- **Phase 3**：智能系统 ✅ 已完成（Wave 1/2/3 + Agent Loop，248 测试通过）
-- **Phase 4**：成长 + 通信 ✅ 已完成（2026-04-28，248+93 测试通过）
-- **Phase 4.5**：收尾 ✅ 已完成（2026-05-07）— 流式回复/jieba分词/代码拆分/插件系统/ChatUI
-- **Phase 5**：MVP 发布 ✅ 已完成（2026-05-15）
-- **Phase 6**：UI 优化 + 工具系统 + 用户引导 + Coding Agent 集成 ✅ 已完成（2026-05-26）
+- **Phase 2**：语音管道 + 灵魂骨架 ⚠️ 模块存在；默认 ASR、VAD、流式语音和 PCM lip-sync 未完成
+- **Phase 3**：智能系统 ⚠️ 基础 Agent Loop/FTS/安全模块存在；语义向量、KG 集成和端到端安全未完成
+- **Phase 4**：成长 + 通信 ⚠️ CRUD/scaffold 存在；自主成长、Discord 启动接线和 scheduler loop 未完成
+- **Phase 4.5**：前端收尾 ⚠️ UI/分词/插件类型存在；真正 provider streaming、abort/clear 和 plugin execution 未完成
+- **Phase 5**：MVP 源码基线 ⚠️ 已建立，真实语音和发布安装包未验收
+- **Phase 6**：UI + 工具 + 引导 + Coding bridge ⚠️ 结构完成，真实集成和 Codex loop 未完成
 - **Phase 7**：全息模式 + 移动通信 + 发布流水线强化（后续）
 
 ## Commands
@@ -222,7 +239,7 @@ platform:save_config(config: Config) → ()
 用户："开始 Phase 3"
 → 同时启动：
   Agent 1 (tools):      Tool Registry + 自注册 + 基础工具
-  Agent 2 (memory):     4-Layer Stack + SQLite + FTS5 + sqlite-vec + 知识图谱 + Mining
+  Agent 2 (memory):     4-Layer Stack + SQLite + FTS5 + 持久向量索引 + 知识图谱 + Mining
   Agent 3 (security):   Prompt 注入防护 + 命令守卫 + 脱敏
   Agent 4 (soul):       子 Agent 委派 + 智能路由 + 上下文压缩
 ```
@@ -293,14 +310,14 @@ platform:save_config(config: Config) → ()
 - 集成时合并到主开发分支
 - 如果改动不冲突且文件不重叠，可在同一分支并行
 
-## Architecture (v1.0.0)
+## Architecture (current files, status annotated)
 
 ```
 Frontend (Vue 3 + Three.js + @pixiv/three-vrm)
   ├── VRMRenderer.ts        # VRM 加载/渲染/动画
-  ├── HologramRenderer.ts   # 全息模式渲染适配器
-  ├── HeadTracker.ts        # 摄像头透视追踪
-  ├── LipSyncModule.ts      # 口型同步
+  ├── HologramRenderer.ts   # 占位开关，无全息渲染
+  ├── HeadTracker.ts        # 实验模块，未接入当前 UI
+  ├── LipSyncModule.ts      # 模块存在；生产 PCM 未接通
   ├── EyeTrackModule.ts     # 眼神跟随
   ├── ExpressionModule.ts   # 表情管理
   ├── HitTestModule.ts      # 点击穿透检测
@@ -309,14 +326,15 @@ Frontend (Vue 3 + Three.js + @pixiv/three-vrm)
 Backend (Rust / Tauri v2)
   ├── agent/                # Fairy Soul (Primary Agent)
   │   ├── primary.rs        #   情感陪伴对话 + ReAct Agent Loop + 记忆注入 + 工具调用
-  │   ├── delegation.rs     #   子 Agent 委派
+  │   ├── delegation.rs     #   Mock/占位委派，未接 PrimaryAgent
   │   ├── toolset.rs        #   可组合工具集
-  │   └── routing.rs        #   智能模型路由
-  ├── llm/                  # LLM 客户端 (基于 Rig)
+  │   └── development_loop.rs # 确定性开发 pipeline，非默认 chat path
+  ├── llm/                  # 原生 HTTP LLM client
   │   ├── provider.rs       #   多提供商适配 (OpenAI/Claude) + Function Calling
-  │   ├── streaming.rs      #   SSE 流式处理
-  │   └── caching.rs        #   Prompt Caching (Anthropic 优化)
-  ├── tools/                # 工具系统 (135+ surface)
+  │   ├── streaming.rs      #   SSE parser；PrimaryAgent 当前未使用真实 streaming
+  │   ├── routing.rs        #   分类模块；未接 PrimaryAgent
+  │   └── caching.rs        #   caching helper；未接正常 chat path
+  ├── tools/                # 21 个运行时工具 + 未来扩展 scaffold
   │   ├── registry.rs       #   Trait-based 零耦合注册 + memory-aware 构造
   │   ├── executor.rs       #   工具执行器 (Send-safe async)
   │   ├── coerce.rs         #   参数类型修正 (LLM 输出容错)
@@ -324,35 +342,35 @@ Backend (Rust / Tauri v2)
   │   ├── permissions.rs    #   工具权限模型
   │   ├── compressor.rs     #   Token 压缩
   │   ├── builtins/         #   内置工具 (web/file/shell/git/github/notion/gmail/...)
-  │   ├── mcp/              #   MCP transport/OAuth/Composio/rate limit
+  │   ├── mcp/              #   MCP/OAuth/Composio 数据结构与 scaffold
   │   └── community/        #   JSON 社区插件加载器
-  ├── voice/                # 语音管道 (sherpa-onnx)
-  │   ├── asr.rs            #   Paraformer 语音识别
-  │   ├── tts.rs            #   Matcha/Kokoro 语音合成 + 文本清洗/分句
-  │   └── vad.rs            #   silero-vad 检测
-  ├── memory/               # 长期记忆 (MemPalace 架构)
-  │   ├── store.rs          #   SQLite + FTS5 + sqlite-vec
+  ├── voice/                # Feature-gated voice + normal-build fallback
+  │   ├── asr.rs            #   Paraformer feature path；普通 build empty Mock
+  │   ├── tts.rs            #   Matcha/Kokoro feature path + macOS say fallback
+  │   └── vad.rs            #   Silero module；未接 microphone capture
+  ├── memory/               # MemPalace-inspired storage，非完整 parity
+  │   ├── store.rs          #   SQLite + FTS5
   │   ├── layers.rs         #   4-Layer Stack (L0-L3, wake-up ~600 tokens)
   │   ├── palace.rs         #   Palace 层级 (wing/room/drawer)
   │   ├── knowledge_graph.rs #   时序三元组 (valid_from/to)
-  │   ├── miner.rs          #   对话/文件记忆入库
-  │   ├── embedding.rs      #   ONNX Runtime 本地 embedding
-  │   └── compressor.rs     #   上下文智能压缩
-  ├── growth/               # 自主成长
-  │   ├── engine.rs         #   成长引擎 (使用即学习)
-  │   └── skill.rs          #   技能管理 (渐进式披露, TOML+Markdown)
-  ├── gateway/              # 通信网关
-  │   ├── discord.rs       #   Discord Bot (手机伴侣)
-  │   └── cron.rs           #   定时任务 (关心/提醒)
+  │   ├── miner.rs          #   keyword-based 对话入库
+  │   ├── embedding.rs      #   当前为非持久伪向量占位
+  │   └── agentmemory_backend.rs # unit-tested facade，未接生产 consumer
+  ├── growth/               # 手动 SQLite CRUD，未接自主成长
+  │   ├── engine.rs         #   experience CRUD
+  │   └── skill.rs          #   SQLite skill CRUD，非 TOML/Markdown runtime
+  ├── gateway/              # 未接启动流程的通信 scaffold
+  │   ├── discord.rs        #   Webhook client；GatewayState 默认 None
+  │   └── cron.rs           #   内存 CRUD；无后台 dispatch loop
   ├── mcp/                  # Coding Agent 集成
-  │   └── server.rs         #   MCP Server (记忆+工具暴露+execute_tool)
+  │   └── server.rs         #   Tauri IPC memory/tool facade，非外部 MCP server
   ├── security/             # 安全体系
   │   ├── injection.rs      #   Prompt Injection 防护
   │   ├── guard.rs          #   命令守卫 (dangerous/caution/safe)
   │   └── redaction.rs      #   秘密脱敏 + URL 安全
   ├── config/               # 配置管理
   │   └── settings.rs
-  └── plugins/              # 插件系统
+  └── plugins/              # JSON loader 类型，未接运行时 registry
       └── loader.rs
 ```
 
@@ -362,13 +380,13 @@ Backend (Rust / Tauri v2)
 - **Backend**: Rust 2021, `rustfmt` + `clippy`, 4-space indent
 - **Comments**: Primarily Chinese, API naming in English
 - **Tests**: Vitest + jsdom (frontend), `#[test]` (backend)
-- **Tool Registry**: 所有工具必须实现 `FairyTool` trait，返回 JSON 字符串
-- **Security**: 工具执行前必须通过 `CommandGuard` 检查
-- **Memory**: 记忆召回必须用 `<memory-context>` 标签隔离
-- **Memory**: 永不摘要用户内容，存原始文本（verbatim）
-- **Memory**: 事实不删除，只通过 valid_to 标记失效
-- **Memory**: 存入前必须去重检查（similarity > 0.9 跳过）
-- **Skills**: TOML frontmatter + Markdown，渐进式披露（list → view → load）
+- **Tool Registry**: 运行时工具实现 `Tool` trait并返回 JSON 字符串
+- **Security target**: 所有执行路径必须共享同一个 `CommandGuard`；当前 IPC/Toolset 状态分离，必须先修
+- **Memory target**: 召回内容必须作为带来源的 untrusted data 隔离；当前 system-role 注入违反此目标
+- **Memory storage**: drawer 保存用户原文；展示层可以截断，但不能悄悄改写事实
+- **Knowledge graph**: 事实通过 valid_to 失效；当前未接正常 chat mining/recall
+- **Dedup current**: 同 wing/room 的 normalized exact match 去重；语义 threshold 未实现
+- **Skills target**: 未来采用 TOML frontmatter + Markdown；当前 runtime 是 SQLite CRUD
 
 ## Key Files
 
@@ -376,13 +394,14 @@ Backend (Rust / Tauri v2)
 - `ARCHITECTURE.md` — v1 架构说明
 - `PROJECT_STRUCTURE.md` — 目录和模块索引
 - `CHANGELOG.md` — 发布记录
+- `docs/REALITY_CHECK.md` — v1 真实状态、已知 bug、未完成缺口和下一轮交接
 - `docs/USAGE_GUIDE.md` — 用户使用指南
 - `docs/AGENT_LOOP.md` — 多 Agent 开发闭环：Manager/Coding/Testing/Goal Agent 协作与安全门
 - `docs/ROADMAP_PHASE7.md` — Phase 7 路线图：流式语音、工具、UI、XR、市场、HCI 研究
 - `docs/DISCORD_SETUP.md` — Discord 网关配置
 - `src-tauri/tauri.conf.json` — Tauri 窗口配置
-- `soul/SOUL.md` — Fairy 的性格、价值观、说话风格（Phase 2 创建）
-- `soul/identity.txt` — L0 身份描述（~100 tokens，每次 wake-up 加载）
+- `soul/SOUL.md` — 目标性格文档；当前 PrimaryAgent 未加载
+- `soul/identity.txt` — 目标 L0 资产；当前 wake-up 未从文件加载
 
 ## Mandatory: Phase 完成后必须更新发布文档
 

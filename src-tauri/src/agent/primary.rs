@@ -18,6 +18,14 @@ use std::time::{Duration, Instant};
 use tauri::Emitter;
 use tokio::sync::Mutex;
 
+const MAX_TOOL_OBSERVATION_CHARS: usize = 12_000;
+const TOOL_EXECUTION_POLICY: &str = r#"Tool execution policy:
+- Complete every action the user requested before presenting a successful final answer.
+- Treat tool results as observations for the next step, not as the final response.
+- Recover from tool errors when another safe approach is available.
+- Verify requested artifacts or side effects with an appropriate read or inspection tool.
+- If any requirement remains incomplete, report partial completion and the failure truthfully."#;
+
 // ========== Agent 配置 ==========
 
 /// Agent 配置
@@ -45,7 +53,7 @@ impl Default for AgentConfig {
             max_tokens: 2048,
             max_history: 50,
             emotion_decay_seconds: 120,
-            max_tool_rounds: 5,
+            max_tool_rounds: 12,
         }
     }
 }
@@ -358,11 +366,11 @@ impl PrimaryAgent {
         // 4. Agent Loop（带超时保护，非流式无 app_handle）
         let max_rounds = self.config.max_tool_rounds;
         let final_text = tokio::time::timeout(
-            Duration::from_secs(120),
+            Duration::from_secs(300),
             self.run_agent_loop(messages, chat_config, tool_defs, max_rounds, None),
         )
         .await
-        .unwrap_or_else(|_| Err(LlmError("Agent 循环超时（120s），请稍后重试".to_string())))?;
+        .unwrap_or_else(|_| Err(LlmError("Agent 循环超时（300s），请稍后重试".to_string())))?;
 
         // 5. 解析情绪标签
         let (cleaned_reply, emotion_kind) = parse_emotion_tag(&final_text);
@@ -436,7 +444,7 @@ impl PrimaryAgent {
         // 4. Agent Loop（非流式，获取最终文本，带超时保护）
         let max_rounds = self.config.max_tool_rounds;
         let full_reply = tokio::time::timeout(
-            Duration::from_secs(120),
+            Duration::from_secs(300),
             self.run_agent_loop(
                 messages,
                 chat_config,
@@ -446,7 +454,7 @@ impl PrimaryAgent {
             ),
         )
         .await
-        .unwrap_or_else(|_| Err(LlmError("Agent 循环超时（120s），请稍后重试".to_string())))?;
+        .unwrap_or_else(|_| Err(LlmError("Agent 循环超时（300s），请稍后重试".to_string())))?;
 
         // 5. 解析情绪标签（必须在流式发送前，避免 [emotion:xxx] 泄漏到前端）
         let (cleaned_reply, emotion_kind) = parse_emotion_tag(&full_reply);
@@ -502,6 +510,15 @@ impl PrimaryAgent {
             tool_call_id: None,
             tool_calls: None,
         }];
+        if self.toolset.is_some() {
+            msgs.push(Message {
+                role: MessageRole::System,
+                content: TOOL_EXECUTION_POLICY.to_string(),
+                timestamp: now,
+                tool_call_id: None,
+                tool_calls: None,
+            });
+        }
         msgs.extend(history.iter().cloned());
         msgs
     }
@@ -616,8 +633,11 @@ impl PrimaryAgent {
         let provider = self.provider.clone();
         let toolset = self.toolset.clone();
         let mut last_tool_results: Vec<(String, String)> = Vec::new();
+        let mut repeated_calls: HashMap<(String, String), u32> = HashMap::new();
+        let mut last_assistant_text: Option<String> = None;
+        let mut empty_responses_after_tools = 0_u8;
 
-        for _round in 1..=max_rounds {
+        for round in 1..=max_rounds {
             if let Some(handle) = &emit_handle {
                 let _ = handle.emit("agent:status", "thinking");
             }
@@ -628,7 +648,11 @@ impl PrimaryAgent {
             {
                 Ok(response) => response,
                 Err(_err) if !last_tool_results.is_empty() => {
-                    return Ok(format_tool_result_fallback(&last_tool_results));
+                    return Ok(agent_loop_fallback(
+                        last_assistant_text.as_deref(),
+                        &last_tool_results,
+                        "LLM 提供商在工具执行后不可用，后续步骤未验证",
+                    ));
                 }
                 Err(err) => return Err(err),
             };
@@ -636,11 +660,40 @@ impl PrimaryAgent {
             match response {
                 LlmResponse::Text(text) => {
                     if text.trim().is_empty() && !last_tool_results.is_empty() {
-                        return Ok(format_tool_result_fallback(&last_tool_results));
+                        empty_responses_after_tools += 1;
+                        if empty_responses_after_tools <= 2 {
+                            continue;
+                        }
+                        return Ok(agent_loop_fallback(
+                            last_assistant_text.as_deref(),
+                            &last_tool_results,
+                            "LLM 连续返回空响应，无法确认后续步骤",
+                        ));
                     }
                     return Ok(text);
                 }
-                LlmResponse::ToolCalls { calls, text: _ } => {
+                LlmResponse::ToolCalls { calls, text } => {
+                    let assistant_text = text.unwrap_or_default();
+                    if !assistant_text.trim().is_empty() {
+                        last_assistant_text = Some(assistant_text.clone());
+                    }
+
+                    if calls.is_empty() {
+                        if assistant_text.trim().is_empty() && !last_tool_results.is_empty() {
+                            empty_responses_after_tools += 1;
+                            if empty_responses_after_tools <= 2 {
+                                continue;
+                            }
+                            return Ok(agent_loop_fallback(
+                                last_assistant_text.as_deref(),
+                                &last_tool_results,
+                                "LLM 连续返回空工具响应，无法确认后续步骤",
+                            ));
+                        }
+                        return Ok(assistant_text);
+                    }
+                    empty_responses_after_tools = 0;
+
                     if let Some(handle) = &emit_handle {
                         let _ = handle.emit("agent:status", "executing_tool");
                     }
@@ -648,7 +701,7 @@ impl PrimaryAgent {
                     // 添加 assistant 消息（含 tool_calls）
                     messages.push(Message {
                         role: MessageRole::Assistant,
-                        content: String::new(),
+                        content: assistant_text,
                         timestamp: current_timestamp(),
                         tool_call_id: None,
                         tool_calls: Some(calls.clone()),
@@ -656,16 +709,31 @@ impl PrimaryAgent {
 
                     // 执行每个工具
                     if let Some(ts) = &toolset {
-                        for call in &calls {
-                            let result = ts.execute(&call.name, &call.arguments).await;
-                            let result_text = match result {
-                                Ok(output) => output,
-                                Err(e) => format!("Tool error: {}", e),
+                        let calls_len = calls.len();
+                        for (index, call) in calls.iter().enumerate() {
+                            let key = (
+                                call.name.clone(),
+                                canonicalize_tool_arguments(&call.arguments),
+                            );
+                            let invocation_count = repeated_calls.entry(key).or_default();
+                            let result_text = if *invocation_count >= 2 {
+                                format!(
+                                    "Tool error: duplicate call blocked after two executions: {} {}",
+                                    call.name, call.arguments
+                                )
+                            } else {
+                                *invocation_count += 1;
+                                match ts.execute(&call.name, &call.arguments).await {
+                                    Ok(output) => output,
+                                    Err(e) => format!("Tool error: {}", e),
+                                }
                             };
-                            last_tool_results.push((call.name.clone(), result_text.clone()));
+                            let observation =
+                                truncate_chars(&result_text, MAX_TOOL_OBSERVATION_CHARS);
+                            last_tool_results.push((call.name.clone(), observation.clone()));
 
                             if let Some(handle) = &emit_handle {
-                                let truncated = truncate_chars(&result_text, 500);
+                                let truncated = truncate_chars(&observation, 500);
                                 let _ = handle.emit(
                                     "agent:tool_log",
                                     serde_json::json!({
@@ -675,17 +743,18 @@ impl PrimaryAgent {
                                 );
                             }
 
+                            let guidance = (index + 1 == calls_len)
+                                .then(|| tool_budget_guidance(round, max_rounds))
+                                .flatten();
+                            let context_observation =
+                                capped_model_observation(&result_text, guidance);
                             messages.push(Message {
                                 role: MessageRole::Tool,
-                                content: result_text,
+                                content: context_observation,
                                 timestamp: current_timestamp(),
                                 tool_call_id: Some(call.id.clone()),
                                 tool_calls: None,
                             });
-                        }
-
-                        if should_return_tool_results_directly(&last_tool_results) {
-                            return Ok(format_tool_result_fallback(&last_tool_results));
                         }
                     }
                     // 继续循环 — LLM 会看到工具结果
@@ -697,14 +766,28 @@ impl PrimaryAgent {
         if let Some(handle) = &emit_handle {
             let _ = handle.emit("agent:status", "thinking");
         }
+        messages.push(Message {
+            role: MessageRole::System,
+            content: "The tool-call budget is exhausted. Give a tool-free final response that separates completed actions, failures, and uncompleted requirements. Do not claim success for anything that was not verified."
+                .to_string(),
+            timestamp: current_timestamp(),
+            tool_call_id: None,
+            tool_calls: None,
+        });
         match provider.chat(messages, config).await {
             Ok(text) if text.trim().is_empty() && !last_tool_results.is_empty() => {
-                Ok(format_tool_result_fallback(&last_tool_results))
+                Ok(agent_loop_fallback(
+                    last_assistant_text.as_deref(),
+                    &last_tool_results,
+                    "工具预算耗尽，最终确认响应为空",
+                ))
             }
             Ok(text) => Ok(text),
-            Err(_err) if !last_tool_results.is_empty() => {
-                Ok(format_tool_result_fallback(&last_tool_results))
-            }
+            Err(_err) if !last_tool_results.is_empty() => Ok(agent_loop_fallback(
+                last_assistant_text.as_deref(),
+                &last_tool_results,
+                "工具预算耗尽，最终确认请求失败",
+            )),
             Err(err) => Err(err),
         }
     }
@@ -935,14 +1018,68 @@ fn format_tool_result_fallback(results: &[(String, String)]) -> String {
     sections.join("\n\n")
 }
 
-fn should_return_tool_results_directly(results: &[(String, String)]) -> bool {
-    !results.is_empty()
-        && results.iter().all(|(tool, _)| {
-            matches!(
-                tool.as_str(),
-                "web_search" | "web_fetch" | "weather" | "github" | "git"
-            )
-        })
+fn agent_loop_fallback(
+    assistant_text: Option<&str>,
+    results: &[(String, String)],
+    reason: &str,
+) -> String {
+    let mut sections = vec![format!("任务未完成：{reason}。")];
+    if let Some(text) = assistant_text.filter(|text| !text.trim().is_empty()) {
+        sections.push(format!("最后进度说明：\n{}", truncate_chars(text, 2_000)));
+    }
+    if !results.is_empty() {
+        sections.push(format!(
+            "已获得但尚未构成完整完成证明的工具结果：\n{}",
+            format_tool_result_fallback(results)
+        ));
+    }
+    sections.join("\n\n")
+}
+
+fn canonicalize_tool_arguments(arguments: &str) -> String {
+    fn canonicalize(value: serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(object) => {
+                let mut entries: Vec<_> = object.into_iter().collect();
+                entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+                serde_json::Value::Object(
+                    entries
+                        .into_iter()
+                        .map(|(key, value)| (key, canonicalize(value)))
+                        .collect(),
+                )
+            }
+            serde_json::Value::Array(values) => {
+                serde_json::Value::Array(values.into_iter().map(canonicalize).collect())
+            }
+            value => value,
+        }
+    }
+
+    serde_json::from_str(arguments)
+        .map(canonicalize)
+        .and_then(|value| serde_json::to_string(&value))
+        .unwrap_or_else(|_| arguments.trim().to_string())
+}
+
+fn tool_budget_guidance(round: u32, max_rounds: u32) -> Option<&'static str> {
+    if max_rounds == 0 {
+        return None;
+    }
+    let percentage = round.saturating_mul(100) / max_rounds;
+    if percentage >= 90 {
+        Some("\n\n[Budget notice] Tool budget is nearly exhausted. Finish only essential remaining actions, verify them, and prepare a truthful final response.")
+    } else if percentage >= 75 {
+        Some("\n\n[Budget notice] Consolidate the remaining work and prioritize verification before the tool budget ends.")
+    } else {
+        None
+    }
+}
+
+fn capped_model_observation(result: &str, guidance: Option<&str>) -> String {
+    let guidance = truncate_chars(guidance.unwrap_or_default(), MAX_TOOL_OBSERVATION_CHARS);
+    let result_budget = MAX_TOOL_OBSERVATION_CHARS.saturating_sub(guidance.chars().count());
+    format!("{}{}", truncate_chars(result, result_budget), guidance)
 }
 
 /// 获取当前时间戳（毫秒）
@@ -959,7 +1096,647 @@ fn current_timestamp() -> i64 {
 mod tests {
     use super::*;
     use crate::llm::provider::MockProvider;
+    use crate::security::guard::CommandGuard;
+    use crate::security::injection::InjectionDetector;
+    use crate::tools::executor::{Tool, ToolError, ToolExecutor};
+    use std::collections::VecDeque;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Mutex as StdMutex;
     use std::time::Duration;
+
+    struct ScriptedProvider {
+        responses: StdMutex<VecDeque<Result<LlmResponse, LlmError>>>,
+        message_batches: StdMutex<Vec<Vec<Message>>>,
+        final_reply: String,
+    }
+
+    impl ScriptedProvider {
+        fn new(responses: Vec<LlmResponse>, final_reply: &str) -> Self {
+            Self {
+                responses: StdMutex::new(responses.into_iter().map(Ok).collect()),
+                message_batches: StdMutex::new(Vec::new()),
+                final_reply: final_reply.to_string(),
+            }
+        }
+
+        fn with_results(responses: Vec<Result<LlmResponse, LlmError>>, final_reply: &str) -> Self {
+            Self {
+                responses: StdMutex::new(responses.into()),
+                message_batches: StdMutex::new(Vec::new()),
+                final_reply: final_reply.to_string(),
+            }
+        }
+    }
+
+    impl LlmProvider for ScriptedProvider {
+        fn chat(
+            &self,
+            messages: Vec<Message>,
+            _config: ChatConfig,
+        ) -> Pin<Box<dyn Future<Output = Result<String, LlmError>> + Send + '_>> {
+            self.message_batches.lock().unwrap().push(messages);
+            let reply = self.final_reply.clone();
+            Box::pin(async move { Ok(reply) })
+        }
+
+        fn chat_stream(
+            &self,
+            _messages: Vec<Message>,
+            _config: ChatConfig,
+            _tx: tokio::sync::mpsc::Sender<crate::llm::StreamChunk>,
+        ) -> Pin<Box<dyn Future<Output = Result<(), LlmError>> + Send + '_>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn name(&self) -> &str {
+            "scripted"
+        }
+
+        fn chat_with_tools(
+            &self,
+            messages: Vec<Message>,
+            _config: ChatConfig,
+            _tools: Vec<ToolDefinition>,
+        ) -> Pin<Box<dyn Future<Output = Result<LlmResponse, LlmError>> + Send + '_>> {
+            self.message_batches.lock().unwrap().push(messages);
+            let response = self.responses.lock().unwrap().pop_front();
+            Box::pin(async move {
+                response
+                    .unwrap_or_else(|| Err(LlmError("scripted responses exhausted".to_string())))
+            })
+        }
+    }
+
+    struct RecordingTool {
+        name: &'static str,
+        output: String,
+        calls: Arc<StdMutex<Vec<String>>>,
+    }
+
+    impl Tool for RecordingTool {
+        fn name(&self) -> &str {
+            self.name
+        }
+
+        fn description(&self) -> &str {
+            "record a test tool invocation"
+        }
+
+        fn validate_input(&self, input: &str) -> bool {
+            serde_json::from_str::<serde_json::Value>(input).is_ok()
+        }
+
+        fn execute(
+            &self,
+            _input: &str,
+        ) -> Pin<Box<dyn Future<Output = Result<String, ToolError>> + Send + '_>> {
+            self.calls.lock().unwrap().push(self.name.to_string());
+            let output = self.output.to_string();
+            Box::pin(async move { Ok(output) })
+        }
+    }
+
+    fn tool_call(id: &str, name: &str, arguments: &str) -> crate::llm::ToolCallRequest {
+        crate::llm::ToolCallRequest {
+            id: id.to_string(),
+            name: name.to_string(),
+            arguments: arguments.to_string(),
+        }
+    }
+
+    fn scripted_agent(
+        provider: Arc<dyn LlmProvider>,
+        calls: Arc<StdMutex<Vec<String>>>,
+        max_tool_rounds: u32,
+    ) -> PrimaryAgent {
+        let executor = Arc::new(ToolExecutor::new());
+        executor.register_tool(Arc::new(RecordingTool {
+            name: "web_search",
+            output: "research result".to_string(),
+            calls: Arc::clone(&calls),
+        }));
+        executor.register_tool(Arc::new(RecordingTool {
+            name: "file_write",
+            output: "file written".to_string(),
+            calls: Arc::clone(&calls),
+        }));
+        executor.register_tool(Arc::new(RecordingTool {
+            name: "file_read",
+            output: "verified file content".to_string(),
+            calls: Arc::clone(&calls),
+        }));
+        executor.register_tool(Arc::new(RecordingTool {
+            name: "unicode_output",
+            output: "预".repeat(MAX_TOOL_OBSERVATION_CHARS + 64),
+            calls,
+        }));
+        executor.register_tool(Arc::new(crate::tools::builtins::git::GitTool::new()));
+        let toolset = Arc::new(Toolset::new(
+            executor,
+            Arc::new(CommandGuard::new()),
+            Arc::new(InjectionDetector::new()),
+        ));
+        let mut config = AgentConfig::default();
+        config.max_tool_rounds = max_tool_rounds;
+        PrimaryAgent {
+            provider,
+            config,
+            history: Mutex::new(Vec::new()),
+            emotion: Mutex::new(EmotionState::default()),
+            toolset: Some(toolset),
+            memory_layers: None,
+            miner: None,
+            app_handle: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn agent_loop_continues_from_research_to_artifact() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call("search-1", "web_search", r#"{"query":"Fairy"}"#)],
+                    text: Some("Research complete; writing the artifact next.".to_string()),
+                },
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call(
+                        "write-1",
+                        "file_write",
+                        r#"{"path":"answer.md","content":"result"}"#,
+                    )],
+                    text: None,
+                },
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call("read-1", "file_read", r#"{"path":"answer.md"}"#)],
+                    text: None,
+                },
+                LlmResponse::Text("completed".to_string()),
+            ],
+            "finalized",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider.clone(), Arc::clone(&calls), 5);
+
+        let result = agent
+            .run_agent_loop(
+                vec![Message {
+                    role: MessageRole::User,
+                    content: "Research Fairy and write answer.md".to_string(),
+                    timestamp: current_timestamp(),
+                    tool_call_id: None,
+                    tool_calls: None,
+                }],
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, "completed");
+        assert_eq!(
+            calls.lock().unwrap().as_slice(),
+            ["web_search", "file_write", "file_read"]
+        );
+        assert!(provider.message_batches.lock().unwrap()[1]
+            .iter()
+            .any(|message| message.role == MessageRole::Assistant
+                && message.content == "Research complete; writing the artifact next."));
+    }
+
+    #[tokio::test]
+    async fn agent_loop_recovers_from_two_empty_follow_ups() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call(
+                        "write-1",
+                        "file_write",
+                        r#"{"path":"answer.md","content":"result"}"#,
+                    )],
+                    text: None,
+                },
+                LlmResponse::Text(String::new()),
+                LlmResponse::Text("   ".to_string()),
+                LlmResponse::Text("completed after retry".to_string()),
+            ],
+            "finalized",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider.clone(), Arc::clone(&calls), 5);
+
+        let result = agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, "completed after retry");
+        assert_eq!(calls.lock().unwrap().as_slice(), ["file_write"]);
+        assert!(provider
+            .message_batches
+            .lock()
+            .unwrap()
+            .iter()
+            .flatten()
+            .all(|message| !(message.role == MessageRole::Assistant
+                && message.tool_calls.is_none()
+                && message.content.is_empty())));
+    }
+
+    #[tokio::test]
+    async fn agent_loop_provider_failure_reports_unverified_completion() {
+        let provider = Arc::new(ScriptedProvider::with_results(
+            vec![
+                Ok(LlmResponse::ToolCalls {
+                    calls: vec![tool_call("search-1", "web_search", r#"{"query":"Fairy"}"#)],
+                    text: Some("Research complete; writing the artifact next.".to_string()),
+                }),
+                Err(LlmError("provider unavailable".to_string())),
+            ],
+            "unused",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider, Arc::clone(&calls), 5);
+
+        let result = agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(result.contains("未完成"));
+        assert!(result.contains("Research complete; writing the artifact next."));
+        assert!(result.contains("research result"));
+        assert_eq!(calls.lock().unwrap().as_slice(), ["web_search"]);
+    }
+
+    #[tokio::test]
+    async fn agent_loop_provider_failure_before_tools_is_an_error() {
+        let provider = Arc::new(ScriptedProvider::with_results(
+            vec![Err(LlmError("provider unavailable".to_string()))],
+            "unused",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider, Arc::clone(&calls), 5);
+
+        let result = agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn agent_loop_caps_unicode_tool_observation_for_model_context() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call("unicode-1", "unicode_output", "{}")],
+                    text: None,
+                },
+                LlmResponse::Text("done".to_string()),
+            ],
+            "unused",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider.clone(), calls, 5);
+
+        agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let batches = provider.message_batches.lock().unwrap();
+        let observation = batches[1]
+            .iter()
+            .find(|message| message.role == MessageRole::Tool)
+            .unwrap();
+        assert_eq!(
+            observation.content.chars().count(),
+            MAX_TOOL_OBSERVATION_CHARS
+        );
+        assert!(observation
+            .content
+            .chars()
+            .all(|character| character == '预'));
+    }
+
+    #[tokio::test]
+    async fn agent_loop_keeps_budget_guidance_inside_observation_cap() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![LlmResponse::ToolCalls {
+                calls: vec![tool_call("unicode-1", "unicode_output", "{}")],
+                text: None,
+            }],
+            "budget finalized",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider.clone(), calls, 1);
+
+        agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                1,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let batches = provider.message_batches.lock().unwrap();
+        let observation = batches
+            .last()
+            .unwrap()
+            .iter()
+            .find(|message| message.role == MessageRole::Tool)
+            .unwrap();
+        assert!(observation.content.chars().count() <= MAX_TOOL_OBSERVATION_CHARS);
+        assert!(observation.content.contains("Budget notice"));
+        assert!(observation.content.contains("nearly exhausted"));
+    }
+
+    #[tokio::test]
+    async fn agent_loop_executes_same_batch_tools_sequentially() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![
+                LlmResponse::ToolCalls {
+                    calls: vec![
+                        tool_call("search-1", "web_search", r#"{"query":"Fairy"}"#),
+                        tool_call(
+                            "write-1",
+                            "file_write",
+                            r#"{"path":"answer.md","content":"result"}"#,
+                        ),
+                        tool_call("read-1", "file_read", r#"{"path":"answer.md"}"#),
+                    ],
+                    text: None,
+                },
+                LlmResponse::Text("done".to_string()),
+            ],
+            "unused",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider, Arc::clone(&calls), 5);
+
+        agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            calls.lock().unwrap().as_slice(),
+            ["web_search", "file_write", "file_read"]
+        );
+    }
+
+    #[tokio::test]
+    async fn agent_loop_feeds_blocked_git_mutation_back_for_recovery() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call(
+                        "git-1",
+                        "git",
+                        r#"{"command":"git branch -D main"}"#,
+                    )],
+                    text: None,
+                },
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call(
+                        "write-1",
+                        "file_write",
+                        r#"{"path":"answer.md","content":"safe fallback"}"#,
+                    )],
+                    text: None,
+                },
+                LlmResponse::Text("recovered safely".to_string()),
+            ],
+            "unused",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider.clone(), Arc::clone(&calls), 5);
+
+        let result = agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, "recovered safely");
+        assert_eq!(calls.lock().unwrap().as_slice(), ["file_write"]);
+        assert!(provider.message_batches.lock().unwrap()[1]
+            .iter()
+            .any(|message| message.role == MessageRole::Tool
+                && message.content.starts_with("Tool error:")));
+    }
+
+    #[test]
+    fn tool_budget_guidance_uses_caution_and_urgent_thresholds() {
+        assert!(tool_budget_guidance(8, 12).is_none());
+        assert!(tool_budget_guidance(9, 12).unwrap().contains("Consolidate"));
+        assert!(tool_budget_guidance(11, 12)
+            .unwrap()
+            .contains("nearly exhausted"));
+    }
+
+    #[tokio::test]
+    async fn agent_loop_blocks_third_canonical_duplicate_call() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call(
+                        "write-1",
+                        "file_write",
+                        r#"{"path":"answer.md","content":"result"}"#,
+                    )],
+                    text: None,
+                },
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call(
+                        "write-2",
+                        "file_write",
+                        r#"{"content":"result","path":"answer.md"}"#,
+                    )],
+                    text: None,
+                },
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call(
+                        "write-3",
+                        "file_write",
+                        r#"{"path":"answer.md","content":"result"}"#,
+                    )],
+                    text: None,
+                },
+                LlmResponse::Text("completed with duplicate blocked".to_string()),
+            ],
+            "finalized",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider.clone(), Arc::clone(&calls), 5);
+
+        let result = agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, "completed with duplicate blocked");
+        assert_eq!(
+            calls.lock().unwrap().as_slice(),
+            ["file_write", "file_write"]
+        );
+        assert!(provider
+            .message_batches
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .iter()
+            .any(|message| message.role == MessageRole::Tool
+                && message.content.contains("duplicate call blocked")));
+    }
+
+    #[tokio::test]
+    async fn agent_loop_recovers_from_tool_error() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call("missing-1", "missing_tool", "{}")],
+                    text: None,
+                },
+                LlmResponse::ToolCalls {
+                    calls: vec![tool_call(
+                        "write-1",
+                        "file_write",
+                        r#"{"path":"answer.md","content":"result"}"#,
+                    )],
+                    text: None,
+                },
+                LlmResponse::Text("recovered".to_string()),
+            ],
+            "finalized",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider.clone(), Arc::clone(&calls), 5);
+
+        let result = agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                5,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, "recovered");
+        assert_eq!(calls.lock().unwrap().as_slice(), ["file_write"]);
+        assert!(provider.message_batches.lock().unwrap()[1]
+            .iter()
+            .any(|message| message.role == MessageRole::Tool
+                && message.content.starts_with("Tool error:")));
+    }
+
+    #[tokio::test]
+    async fn agent_loop_uses_tool_free_truthful_finalization_at_limit() {
+        let provider = Arc::new(ScriptedProvider::new(
+            vec![LlmResponse::ToolCalls {
+                calls: vec![tool_call(
+                    "write-1",
+                    "file_write",
+                    r#"{"path":"answer.md","content":"result"}"#,
+                )],
+                text: None,
+            }],
+            "completed: file written; uncompleted: verification",
+        ));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider.clone(), Arc::clone(&calls), 1);
+
+        let result = agent
+            .run_agent_loop(
+                Vec::new(),
+                ChatConfig::default(),
+                agent.get_tool_definitions(),
+                1,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, "completed: file written; uncompleted: verification");
+        assert_eq!(calls.lock().unwrap().as_slice(), ["file_write"]);
+        assert!(provider
+            .message_batches
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .iter()
+            .any(|message| message.role == MessageRole::System
+                && message.content.contains("tool-call budget is exhausted")
+                && message.content.contains("Do not claim success")));
+    }
+
+    #[tokio::test]
+    async fn build_messages_adds_tool_execution_policy() {
+        let provider = Arc::new(ScriptedProvider::new(Vec::new(), "done"));
+        let calls = Arc::new(StdMutex::new(Vec::new()));
+        let agent = scripted_agent(provider, calls, 5);
+
+        let messages = agent.build_messages().await;
+
+        assert!(messages.iter().any(|message| {
+            message.role == MessageRole::System
+                && message.content.contains("Complete every action")
+                && message.content.contains("Verify requested artifacts")
+                && message.content.contains("partial completion")
+        }));
+    }
 
     fn make_agent() -> PrimaryAgent {
         let provider = Arc::new(MockProvider::new("[emotion:happy] 收到！"));
@@ -1086,6 +1863,8 @@ mod tests {
         assert_eq!(config.temperature, 0.7);
         assert_eq!(config.max_history, 50);
         assert_eq!(config.emotion_decay_seconds, 120);
+        assert_eq!(config.max_tool_rounds, 12);
+        assert_eq!(config.max_tool_rounds, 12);
     }
 
     #[tokio::test]

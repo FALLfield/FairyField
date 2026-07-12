@@ -18,7 +18,7 @@ FairyField/
 │   │   ├── gateway/             # Discord/webhook and cron gateway
 │   │   ├── growth/              # Growth engine and skills
 │   │   ├── llm/                 # Provider adapters, streaming, routing, caching
-│   │   ├── mcp/                 # Fairy MCP server
+│   │   ├── mcp/                 # Tauri IPC memory/tool facade; external MCP not implemented
 │   │   ├── memory/              # SQLite memory, KG, embeddings, shared backend
 │   │   ├── plugins/             # JSON plugin loader
 │   │   ├── security/            # Injection guard, command guard, redaction
@@ -33,9 +33,11 @@ FairyField/
 ├── public/
 │   └── models/default/          # Default GLB character asset
 ├── config/default.json          # Public default config template
-├── docs/                        # User-facing setup guides
-│   ├── LOCAL_TTS.md             # Local Matcha/Kokoro voice strategy
-│   └── ROADMAP_PHASE7.md        # Next-step product, XR, market, and HCI plan
+├── docs/                        # User, handover, voice, animation, and roadmap guides
+│   ├── REALITY_CHECK.md         # Source-of-truth implementation handover
+│   ├── AGENT_LOOP.md            # Development-loop behavior and known limits
+│   ├── LOCAL_TTS.md             # Local Matcha/Kokoro voice strategy and gaps
+│   └── ROADMAP_PHASE7.md        # Product-closure and future roadmap
 ├── plugins/                     # Example plugin manifests
 ├── scripts/                     # Model download helpers
 ├── soul/                        # Fairy personality and identity prompts
@@ -52,4 +54,5 @@ FairyField/
 - Runtime state lives under `~/.fairyfield/`.
 - API keys are kept out of public config and stored in the secret store.
 - Downloaded voice models are intentionally outside the repository.
-- The frontend and backend communicate only through typed Tauri command wrappers in `src/lib/tauri-commands.ts`.
+- Most frontend/backend calls use Tauri wrappers, but some components still invoke commands directly and several TypeScript config types are stale relative to Rust.
+- The external Hermes and MemPalace reference repositories live in the parent directory and are not part of this Git repository.

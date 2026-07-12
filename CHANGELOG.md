@@ -2,6 +2,32 @@
 
 All notable changes to FairyField will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Reworked `PrimaryAgent` into a bounded Hermes-style execution loop: tool results always return to the model, the default budget is 12 iterations, observations are Unicode-capped, repeated canonical calls are bounded, and budget exhaustion receives a tool-free finalization turn.
+- Added an explicit execution policy requiring requested side effects and artifact read-back before reporting success.
+- Added `docs/REALITY_CHECK.md` as the source of truth for verified functionality, user-reported failures, incomplete scaffolding, and next-model handoff.
+- Updated voice, roadmap, architecture, development-loop, usage, and manual-test docs to distinguish implemented code from runtime scaffolding and unverified product behavior.
+- Updated verification to 527 default automated tests (425 Rust + 102 frontend) and 427 Rust tests under `sherpa-onnx` after the Hermes-style loop regressions.
+- Recorded that the runtime registry exposes 21 tools, external MCP is not implemented, semantic vector memory is placeholder, and the normal build does not include real sherpa ASR/TTS/VAD.
+
+### Fixed
+- Fixed multi-step requests stopping after web, weather, GitHub, or Git output. Regression coverage now proves `web_search -> file_write -> file_read -> final response` and tool-error recovery.
+- Git function calling now has a real JSON schema, rejects branch/tag/remote mutations, output writes, `--no-index` file reads, and external diff/textconv helpers including abbreviated long options, and kills timed-out Git children.
+- Documented the Desktop file-tool path fix from `60aac49`: Desktop-relative, home-relative, `$HOME`-relative, and absolute Desktop paths now resolve for user-facing file writes while non-Desktop paths remain blocked.
+
+### Known Issues
+- Multi-step execution still relies on the model to decide semantic completion; no independent requirement verifier, request cancellation, provider failover, or tool-pair-aware context summarizer is connected to normal chat.
+- Chat streaming is simulated after full completion; abort and clear affect only frontend state.
+- Security IPC and Toolset do not share CommandGuard state, file policy needs symlink/canonical containment review, and recalled memory can become trusted system content.
+- Voice is not ChatGPT Voice-like: default ASR is empty Mock, VAD is disconnected, recording is fixed-length, PCM lip sync is disconnected, simulated mouth motion is buggy, and multilingual behavior is incomplete.
+- Memory FTS storage exists, but persistent semantic vectors, integrated knowledge-graph recall, safe memory provenance, correction/deletion controls, and production MCP access are incomplete.
+- Onboarding personality data and soul files are persisted but not consumed by PrimaryAgent.
+- The development loop lacks Codex support, UI routing, worktree isolation, cancellation, and requirement-level Goal verification.
+- Third-party tools, Browser, Cron, Composio, and community plugins include non-executing scaffold paths.
+- The v1.0.0 tag lags main; latest main CI is red because the backend toolchain is pinned below locked dependency requirements and the audit job does not target src-tauri/Cargo.lock. Signed release artifacts also require a separate pass.
+
 ## [1.0.0] — 2026-05-28
 
 ### Added
@@ -19,7 +45,7 @@ All notable changes to FairyField will be documented in this file.
 - Token compressor (TokenJuice-style: HTML to text, URL shortening, truncation)
 - Tools directory restructured: builtins/ (web, file_ops, shell, git, memory, obsidian)
 - Obsidian vault integration tool (search notes, read/write, walkdir traversal)
-- 153 new Rust-side tests since the MVP baseline; default Rust suite is now 405 tests, with 407 tests under `sherpa-onnx`
+- 157 new Rust-side tests since the MVP baseline; default Rust suite is now 409 tests, with 411 tests under `sherpa-onnx`
 - User configuration system (config/user.rs, ~/.fairyfield/user.json)
 - Coding Agent Manager (Claude Code/KiloCode/OpenCode CLI subprocess support)
 - Multi-agent development loop with ManagerAgent, CodingAgent, TestingAgent, and GoalAgent evidence gates
@@ -39,7 +65,7 @@ All notable changes to FairyField will be documented in this file.
 - Tool directory: flat tools/ to tools/builtins/ + tools/mcp/ + tools/community/
 - MCP Server: 3 tools to 5 tools (added execute_tool + get_context)
 - Release metadata aligned for GitHub v1 publication
-- Release verification now covers 507 default automated tests (405 Rust + 102 Frontend), plus 407 Rust tests under `sherpa-onnx`
+- Release verification now covers 511 default automated tests (409 Rust + 102 Frontend), plus 411 Rust tests under `sherpa-onnx`
 - Memory wake-up now derives L1 summaries and L2 palace indexes from stored drawers before falling back to static metadata
 - Memory saves now skip normalized exact duplicates in the same wing/room, and fallback conversation mining stores user text verbatim instead of truncating it
 - Development loop retries now feed the previous failed test output back into the CodingAgent prompt instead of starting the next iteration blind
