@@ -409,6 +409,32 @@ Update `docs/v2/STATUS.md` after each integration with current commit, verified/
 
 ## ✅ Release gates and session checklist
 
+### Ghostty launch and shell-injection safety
+
+Use `scripts/omx-ghostty.sh` as the supported Ghostty entry point for this repository:
+
+```bash
+./scripts/omx-ghostty.sh
+```
+
+The launcher keeps the leader in an OMX-managed tmux session, disables the OMX fallback notification watcher with `OMX_NOTIFY_FALLBACK=0`, and gives worker startup readiness/evidence three minutes. It also gives isolated workers access to the repository's `.omx/state` directory so they can update their mailbox, task state, and locks without gaining access to unrelated paths. Existing `OMX_TEAM_WORKER_LAUNCH_ARGS` values are preserved unchanged. The disabled watcher is intentionally not a product feature loss: it is a shell-safety measure. In a Ghostty/fish session it can misidentify the `❯` prompt as a live Codex prompt and submit status guidance as a shell command.
+
+After the launcher reports a session, attach only through Ghostty:
+
+```bash
+tmux attach -t <session-name>
+```
+
+Never run `omx team ...` directly at a bare `fish`, `zsh`, or `bash` prompt. Start the OMX leader first, then give the live Codex leader an explicit `$team` request. This preserves the intended destination for team messages: an active Codex pane rather than a shell. Use the HUD, `omx sidecar`, `omx team status`, and runtime state as read-only observation surfaces; do not turn status text into terminal input.
+
+Before accepting a team-runtime change, run a disposable no-write smoke and capture the leader pane. It passes only when all of the following are true:
+
+- The requested worker count and task decomposition match the command that was issued.
+- Worker readiness completes inside the configured startup window.
+- The leader-pane capture contains no `[OMX_TMUX_INJECT]` text and no shell error caused by an OMX status message.
+- The project worktree, index, and branch are unchanged by the smoke.
+- The disposable team is shut down and its tmux session no longer exists.
+
 ### Release candidate gate
 
 - [ ] M0–M4 P0/P1 tasks are integrated with requirement-level evidence
